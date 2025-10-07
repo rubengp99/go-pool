@@ -11,7 +11,7 @@ import (
 )
 
 // NoChan is the implementation for NoChan Async groups
-type NoChan interface{}
+type NoChan any
 
 // AsyncFunc is a function that takes a generic type T and returns an error
 type AsyncFunc[T any] func(T) error

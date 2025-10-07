@@ -22,13 +22,13 @@ func TestConcurrentClient(t *testing.T) {
 		return nil
 	}
 
-	requests := []async.Task{
-		async.NewTask(tFunc),
-		async.NewTask(tFunc),
-		async.NewTask(tFunc),
+	requests := []async.Worker{
+		async.NewWorker(tFunc),
+		async.NewWorker(tFunc),
+		async.NewWorker(tFunc),
 	}
 
-	async := async.NewAsyncGroup[any]()
+	async := async.NewPool[any]()
 	defer async.Close()
 	err := async.Go(requests).Wait()
 
@@ -49,16 +49,16 @@ func TestConcurrentClientWithError(t *testing.T) {
 		return nil
 	}
 
-	requests := []async.Task{
-		async.NewTask(tFunc),
-		async.NewTask(func(t async.Args[any]) error {
+	requests := []async.Worker{
+		async.NewWorker(tFunc),
+		async.NewWorker(func(t async.Args[any]) error {
 			numInvocations++
 			return fmt.Errorf("bye")
 		}),
-		async.NewTask(tFunc),
+		async.NewWorker(tFunc),
 	}
 
-	async := async.NewAsyncGroup[any]()
+	async := async.NewPool[any]()
 	defer async.Close()
 	err := async.Go(requests).Wait()
 
@@ -81,11 +81,11 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 		return nil
 	}
 
-	requests := []async.Task{
-		async.NewTask(tFunc),
-		async.NewTask(tFunc),
-		async.NewTask(tFunc),
-		async.NewTaskWithRetry(3, 100*time.Millisecond, func(t async.Args[any]) error {
+	requests := []async.Worker{
+		async.NewWorker(tFunc),
+		async.NewWorker(tFunc),
+		async.NewWorker(tFunc),
+		async.NewWorker(func(t async.Args[any]) error {
 			numInvocations++
 
 			if numRetries < 2 {
@@ -94,10 +94,10 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 			}
 
 			return nil
-		}),
+		}).WithRetry(3, 100*time.Millisecond),
 	}
 
-	async := async.NewAsyncGroup[any]()
+	async := async.NewPool[any]()
 	defer async.Close()
 	err := async.Go(requests).Wait()
 	t.Run("6 requests done", func(t *testing.T) {
@@ -117,16 +117,16 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 	numInvocations := 0
 	numRetries := 0
 
-	atFunc := async.NewTask(func(t async.Args[any]) error {
+	atFunc := async.NewWorker(func(t async.Args[any]) error {
 		numInvocations++
 		return nil
 	})
 
-	requests := []async.Task{
+	requests := []async.Worker{
 		atFunc,
 		atFunc,
 		atFunc,
-		async.NewTask(func(t async.Args[any]) error {
+		async.NewWorker(func(t async.Args[any]) error {
 			numInvocations++
 			numRetries++
 
@@ -134,7 +134,7 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 		}).WithRetry(3, 100*time.Millisecond),
 	}
 
-	async := async.NewAsyncGroup[any]()
+	async := async.NewPool[any]()
 	defer async.Close()
 	err := async.Go(requests).Wait()
 	t.Run("6 requests done", func(t *testing.T) {
@@ -155,20 +155,20 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 	os.Setenv("STAGE", "test")
 	numInvocations := 0
 
-	requests := []async.Task{
-		async.NewTask(func(t async.Args[any]) error {
+	requests := []async.Worker{
+		async.NewWorker(func(t async.Args[any]) error {
 			numInvocations++
 
 			return fmt.Errorf("bye 1")
 		}),
-		async.NewTask(func(t async.Args[any]) error {
+		async.NewWorker(func(t async.Args[any]) error {
 			numInvocations++
 
 			return fmt.Errorf("bye 2")
 		}),
 	}
 
-	async := async.NewAsyncGroup[any]().WithRetry(3, 100*time.Millisecond)
+	async := async.NewPool[any]().WithRetry(3, 100*time.Millisecond)
 	defer async.Close()
 	err := async.Go(requests).Wait()
 	t.Run("6 requests done", func(t *testing.T) {
@@ -200,11 +200,11 @@ func TestConcurrentClientWithChannels(t *testing.T) {
 		return nil
 	}
 
-	requests := []async.Task{
-		async.NewTask(tFunc),
+	requests := []async.Worker{
+		async.NewWorker(tFunc),
 	}
 
-	async := async.NewAsyncGroup[test]()
+	async := async.NewPool[test]()
 	async.Close()
 	err := async.Go(requests).Wait()
 

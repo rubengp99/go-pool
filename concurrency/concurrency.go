@@ -10,53 +10,85 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// NoChan is the implementation for NoChan Async groups
-type NoChan any
-
-// AsyncFunc is a function that takes a generic type T and returns an error
-type AsyncFunc[T any] func(T) error
-
-// NewAsyncFunc creates a new AsyncFunc of type T
-func NewAsyncFunc[T any](param T, f func(T) error) AsyncFunc[T] {
-	return AsyncFunc[T](f)
-}
-
-// WithRetry wraps an AsyncFunc and returns a new AsyncFunc with retry logic
-func (f AsyncFunc[T]) WithRetry(attempts uint, sleep time.Duration, param T) AsyncFunc[T] {
-	return NewAsyncFuncWithRetry(attempts, sleep, f, param)
-}
-
-// NewAsyncFuncWithRetry creates an async function that will retry as many times as necessary
-func NewAsyncFuncWithRetry[T any](attempts uint, sleep time.Duration, f AsyncFunc[T], param T) AsyncFunc[T] {
-	return func(T) error {
-		return retry.DoFunc(attempts, sleep, func() error {
-			return f(param)
-		})
+// NewTask creates a new task of type T
+func NewTask[T any](f func(T) error) Task {
+	return &taskWrapper[T]{
+		fn: f,
 	}
 }
+
+// NewArguedTask creates a new task of type T with argument
+func NewArguedTask[T any](f func(T) error, arg T) Task {
+	return &taskWrapper[T]{
+		fn:  f,
+		arg: arg,
+	}
+}
+
+// NewTaskWithRetry creates a new task of type T with retryable flows
+func NewTaskWithRetry[T any](attempts uint, sleep time.Duration, f func(T) error) Task {
+	return &taskWrapper[T]{
+		fn: func(t T) error {
+			return retry.DoFunc(attempts, sleep, func() error {
+				return f(t)
+			})
+		},
+	}
+}
+
+// NewArguedTaskWithRetry creates a new task of type T with argument and retryable flows
+func NewArguedTaskWithRetry[T any](attempts uint, sleep time.Duration, f func(T) error, arg T) Task {
+	return &taskWrapper[T]{
+		fn: func(t T) error {
+			return retry.DoFunc(attempts, sleep, func() error {
+				return f(t)
+			})
+		},
+		arg: arg,
+	}
+}
+
+// Promise is a function that takes a generic type T and returns an error
+type Promise[T any] func(T) error
 
 // Task is an interface that wraps an async function with any type of parameter
 type Task interface {
 	Execute() error
-	GenExecuteWithRetry(attempts uint, sleep time.Duration) func() error
+	ExecuteWithRetry(attempts uint, sleep time.Duration) error
+	WithRetry(attempts uint, sleep time.Duration) Task
 }
 
-// TaskWrapper is a wrapper around AsyncFunc to conform to the Task interface
-type TaskWrapper[T any] struct {
-	fn    AsyncFunc[T]
-	param T
+// taskWrapper is a wrapper around Promise to conform to the Task interface
+type taskWrapper[T any] struct {
+	fn  Promise[T]
+	arg T
 }
 
-// Execute runs the AsyncFunc with the provided parameter
-func (tw *TaskWrapper[T]) Execute() error {
-	return tw.fn(tw.param)
+// Execute runs the Promise with the provided parameter
+func (tw *taskWrapper[T]) Execute() error {
+	return tw.fn(tw.arg)
 }
 
-// GenExecuteWithRetry generates the AsyncFunc with the provided parameter and retry config
-func (tw *TaskWrapper[T]) GenExecuteWithRetry(attempts uint, sleep time.Duration) func() error {
-	return func() error {
+// ExecuteWithRetry runs the Promise with the provided parameter with retryable config
+func (tw *taskWrapper[T]) ExecuteWithRetry(attempts uint, sleep time.Duration) error {
+	return retry.DoFunc(attempts, sleep, func() error {
+		return tw.fn(tw.arg)
+	})
+}
+
+// WithRetry wraps an Promise and returns a new Promise with retry logic
+func (f taskWrapper[T]) WithRetry(attempts uint, sleep time.Duration) Task {
+	return &taskWrapper[T]{
+		arg: f.arg,
+		fn:  NewPromiseWithRetry(attempts, sleep, f),
+	}
+}
+
+// NewPromiseWithRetry creates an async function that will retry as many times as necessary
+func NewPromiseWithRetry[T any](attempts uint, sleep time.Duration, tw taskWrapper[T]) Promise[T] {
+	return func(T) error {
 		return retry.DoFunc(attempts, sleep, func() error {
-			return tw.fn(tw.param)
+			return tw.fn(tw.arg)
 		})
 	}
 }
@@ -66,7 +98,6 @@ type AsyncGroup[T any] struct {
 	group   *errgroup.Group
 	ctx     context.Context
 	retry   *retryConfig
-	errors  chan error
 	channel chan T
 }
 
@@ -80,17 +111,10 @@ func (a *AsyncGroup[T]) Go(tasks []Task) *AsyncGroup[T] {
 	for _, task := range tasks {
 		t := task
 		a.group.Go(func() error {
-			execute := t.Execute
 			if a.retry != nil {
-				execute = t.GenExecuteWithRetry(a.retry.attempts, a.retry.sleep)
+				return t.ExecuteWithRetry(a.retry.attempts, a.retry.sleep)
 			}
-
-			err := execute()
-			if err != nil {
-				// Send error to the channel
-				a.errors <- err
-			}
-			return err
+			return t.Execute()
 		})
 	}
 	return a
@@ -107,8 +131,8 @@ func (a *AsyncGroup[T]) Wait() error {
 // Cancel allows all async group cancellations
 type Cancel func()
 
-// NewAsyncGroup creates a new AsyncFunc group and allows to run asynchronously
-func NewAsyncGroup[T any]() (*AsyncGroup[T], Cancel) {
+// NewAsyncGroup creates a new Promise group and allows to run asynchronously
+func NewAsyncGroup[T any]() *AsyncGroup[T] {
 	// we can cancel context with specific errors when returning an error is not possible
 	g, ctx := errgroup.WithContext(context.Background())
 
@@ -120,15 +144,16 @@ func NewAsyncGroup[T any]() (*AsyncGroup[T], Cancel) {
 	agroup := &AsyncGroup[T]{
 		group:   g,
 		ctx:     ctx,
-		errors:  make(chan error),
 		channel: make(chan T),
 	}
 
-	return agroup, func() {
-		agroup.ctx.Done()
-		close(agroup.errors)
-		close(agroup.channel)
-	}
+	return agroup
+}
+
+// Close closes channels and contexts in use to prevent memory leaks
+func (g AsyncGroup[T]) Close() {
+	g.ctx.Done()
+	close(g.channel)
 }
 
 // WithLimit returns an AsyncGroup that will run asynchronously with a limit of workers

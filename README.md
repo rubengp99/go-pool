@@ -45,7 +45,7 @@ import "github.com/rubengp99/go-async"
 
 ## 🚀 Usage Examples
 
-### Basic Example
+### 🧠 Basic Example
 
 ```go
 package main
@@ -80,9 +80,9 @@ func main() {
 
 ---
 
-### Example with Retry and Limits
+### 🔁 Example with Retry and Limits
 
-#### Global Retry (Pool level)
+#### ⚙️ Global Retry (Pool level)
 
 ```go
 package main
@@ -121,7 +121,7 @@ func main() {
 }
 ```
 
-#### Individual Retry (Worker level)
+#### 🧩 Individual Retry (Worker level)
 
 ```go
 package main
@@ -161,9 +161,9 @@ func main() {
 
 ---
 
-### Example with Drainable Channel
+### 📤 Example with Drainable Channel
 
-#### Worker without inputs
+#### 🧩 Worker without inputs
 
 ```go
 package main
@@ -196,7 +196,7 @@ func main() {
 }
 ```
 
-#### Worker with inputs
+#### 🧩 Worker with inputs
 
 ```go
 package main

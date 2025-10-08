@@ -25,7 +25,7 @@ type retryConfig struct {
 }
 
 // Go runs the provided async tasks, handling them generically
-func (p *Pool[T]) Go(tasks []Worker) *Pool[T] {
+func (p *Pool[T]) Go(tasks []Worker) error {
 	for _, t := range tasks {
 		p.group.Go(func() error {
 			var err error
@@ -44,12 +44,18 @@ func (p *Pool[T]) Go(tasks []Worker) *Pool[T] {
 			return err
 		})
 	}
-	return p
-}
 
-// Wait waits until done and returns an error if it occurs
-func (p *Pool[T]) Wait() error {
-	return p.group.Wait()
+	var err error
+	// After launching all workers, run a goroutine that waits and shuts down drains
+	go func() {
+		err = p.group.Wait()
+		for _, w := range tasks {
+			// shut down workers automatically to prevent memory leaks and channel deadlocks
+			w.ShutDown()
+		}
+	}()
+
+	return err
 }
 
 // Errors returns all errors collected during runtime, and returns a flag indicating if there were errors or not

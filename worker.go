@@ -13,14 +13,6 @@ func NewWorker[T any](f func(arg Args[T]) error) *Task[T] {
 	}
 }
 
-// NewArguedWorker creates a new worker of type T with argument
-func NewArguedWorker[T any](f func(arg Args[T]) error, arg Args[T]) *Task[T] {
-	return &Task[T]{
-		fn:  f,
-		arg: arg,
-	}
-}
-
 // Promise is a function that takes a generic type T and returns an error
 type Promise[T any] func(arg Args[T]) error
 
@@ -28,6 +20,7 @@ type Promise[T any] func(arg Args[T]) error
 type Worker interface {
 	Executable
 	Retryable
+	Drainable
 }
 
 // Executable is an interface that wraps an executable functionality
@@ -42,8 +35,8 @@ type Retryable interface {
 
 // Args represents task Args
 type Args[T any] struct {
-	Input   T
-	Channel Drain[T]
+	Input   *T
+	Channel chan<- T
 }
 
 // Task is a task wrapper around Promise to conform to the Worker interface
@@ -77,7 +70,13 @@ func (t *Task[T]) ShutDown() {
 }
 
 // DrainTo defines channel output of the current worker
-func (t *Task[T]) DrainTo(c Drain[T]) Worker {
-	t.arg.Channel = c
+func (t *Task[T]) DrainTo(c *Drain[T]) Worker {
+	t.arg.Channel = c.Channel()
+	return t
+}
+
+// WithInput defines input of the current worker
+func (t *Task[T]) WithInput(c *T) Worker {
+	t.arg.Input = c
 	return t
 }

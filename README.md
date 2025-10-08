@@ -163,8 +163,6 @@ func main() {
 
 ### 📤 Example with Drainable Channel
 
-#### 🧩 Worker without inputs
-
 ```go
 package main
 
@@ -196,38 +194,6 @@ func main() {
 }
 ```
 
-#### 🧩 Worker with inputs
-
-```go
-package main
-
-import (
-	"fmt"
-	"github.com/rubengp99/go-async"
-)
-
-func main() {
-	output := make(async.Drain[int], 10)
-
-	workers := []async.Worker{
-        async.NewArguedWorker(func(arg async.Args[int]) error {
-            arg.Channel <- arg.Input * 2
-            return nil
-        }, async.Args[int]{Input: 5, Channel: output}),
-    }
-
-	pool := async.NewPool[int]()
-	err := pool.Go(workers).Wait()
-    if err != nil {
-        panic("Oh no!")
-    }
-
-	results := output.Drain()
-
-	fmt.Println("Results:", results)
-}
-```
-
 ---
 
 ## ⚙️ API Overview
@@ -252,7 +218,6 @@ func main() {
 | Function | Description |
 |-----------|-------------|
 | `NewWorker[T](fn func(arg Args[T]) error)` | Creates a new worker without an argument |
-| `NewArguedWorker[T](fn func(arg Args[T]) error, arg Args[T])` | Creates a worker with an argument |
 | `(*Task[T]) Execute() error` | Executes the worker function |
 | `(*Task[T]) WithRetry(attempts uint, sleep time.Duration)` | Adds retry logic to the worker |
 | `(*Task[T]) DrainTo(c Drain[T]) Worker` | Directs output to a channel |

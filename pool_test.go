@@ -34,7 +34,7 @@ func TestConcurrentClient(t *testing.T) {
 
 	async := async.NewPool[any]()
 	defer async.Close()
-	err := async.Go(requests).Wait()
+	err := async.Go(requests)
 
 	t.Run("No errors", func(t *testing.T) {
 		assert.NoError(t, err)
@@ -64,7 +64,7 @@ func TestConcurrentClientWithError(t *testing.T) {
 
 	async := async.NewPool[any]()
 	defer async.Close()
-	err := async.Go(requests).Wait()
+	err := async.Go(requests)
 
 	t.Run("errors", func(t *testing.T) {
 		assert.Error(t, err)
@@ -103,7 +103,7 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 
 	async := async.NewPool[any]()
 	defer async.Close()
-	err := async.Go(requests).Wait()
+	err := async.Go(requests)
 	t.Run("6 requests done", func(t *testing.T) {
 		assert.Equal(t, 6, numInvocations)
 	})
@@ -140,7 +140,7 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 
 	async := async.NewPool[any]()
 	defer async.Close()
-	err := async.Go(requests).Wait()
+	err := async.Go(requests)
 	t.Run("6 requests done", func(t *testing.T) {
 		assert.Equal(t, 6, numInvocations)
 	})
@@ -174,7 +174,7 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 
 	async := async.NewPool[any]().WithRetry(3, 100*time.Millisecond)
 	defer async.Close()
-	err := async.Go(requests).Wait()
+	err := async.Go(requests)
 	t.Run("6 requests done", func(t *testing.T) {
 		assert.Equal(t, 6, numInvocations)
 	})
@@ -194,14 +194,14 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 	})
 }
 
-func TestConcurrentClientWithInternalChannel(t *testing.T) {
+func TestConcurrentClientWithWorkerChannel(t *testing.T) {
 	numInvocations := 0
 
-	output := make(async.Drain[typeA])
+	// Number of workers = 1 (can increase if needed)
+	output := async.NewDrainer[typeA]() // auto-buffered channel
 
 	tFunc := func(t async.Args[typeA]) error {
 		numInvocations++
-
 		t.Channel <- typeA{value: "hello-world!"}
 		return nil
 	}
@@ -210,20 +210,26 @@ func TestConcurrentClientWithInternalChannel(t *testing.T) {
 		async.NewWorker(tFunc).DrainTo(output),
 	}
 
-	async := async.NewPool[typeA]()
-	defer async.Close()
-	err := async.Go(requests).Wait()
+	asyncPool := async.NewPool[typeA]()
+	defer asyncPool.Close()
+
+	// Run the worker(s)
+	err := asyncPool.Go(requests)
+
+	// Collect results safely
 	results := output.Drain()
 
 	t.Run("No errors", func(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("1 requests done", func(t *testing.T) {
+	t.Run("1 request done", func(t *testing.T) {
 		assert.Equal(t, 1, numInvocations)
 	})
 
 	t.Run("results drained", func(t *testing.T) {
-		assert.Equal(t, 1, len(results))
+		if assert.Equal(t, 1, len(results)) {
+			assert.Equal(t, "hello-world!", results[0].value)
+		}
 	})
 }

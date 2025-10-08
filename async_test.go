@@ -10,8 +10,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type test struct {
+type typeA struct {
 	value string
+}
+
+type typeB struct {
+	value float32
 }
 
 func TestConcurrentClient(t *testing.T) {
@@ -190,23 +194,26 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 	})
 }
 
-func TestConcurrentClientWithChannels(t *testing.T) {
+func TestConcurrentClientWithInternalChannel(t *testing.T) {
 	numInvocations := 0
 
-	c := make(chan test)
+	output := make(async.Drain[typeA])
 
-	tFunc := func(t async.Args[test]) error {
+	tFunc := func(t async.Args[typeA]) error {
 		numInvocations++
+
+		t.Channel <- typeA{value: "hello-world!"}
 		return nil
 	}
 
 	requests := []async.Worker{
-		async.NewWorker(tFunc),
+		async.NewWorker(tFunc).DrainTo(output),
 	}
 
-	async := async.NewPool[test]()
-	async.Close()
+	async := async.NewPool[typeA]()
+	defer async.Close()
 	err := async.Go(requests).Wait()
+	results := output.Drain()
 
 	t.Run("No errors", func(t *testing.T) {
 		assert.NoError(t, err)
@@ -214,5 +221,9 @@ func TestConcurrentClientWithChannels(t *testing.T) {
 
 	t.Run("1 requests done", func(t *testing.T) {
 		assert.Equal(t, 1, numInvocations)
+	})
+
+	t.Run("results drained", func(t *testing.T) {
+		assert.Equal(t, 1, len(results))
 	})
 }

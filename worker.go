@@ -59,12 +59,14 @@ func (t *Task[T]) Execute() error {
 
 // WithRetry wraps an Promise and returns a new Promise with retry logic
 func (t *Task[T]) WithRetry(attempts uint, sleep time.Duration) Worker {
-	t.fn = func(arg Args[T]) error {
-		return retry.DoFunc(attempts, sleep, func() error {
-			return t.fn(t.arg)
-		})
+	return &Task[T]{
+		arg: t.arg,
+		fn: func(arg Args[T]) error {
+			return retry.DoFunc(attempts, sleep, func() error {
+				return t.fn(t.arg)
+			})
+		},
 	}
-	return t
 }
 
 // ShutDown shuts down the underlying channel communication

@@ -59,23 +59,30 @@ func main() {
 	pool := async.NewPool[int]()
 
 	// Create workers
-	worker1 := async.NewWorker(func(arg async.Args[int]) error {
-		fmt.Println("Worker 1 processing:", arg.Input)
-		return nil
-	})
-	worker2 := async.NewWorker(func(arg async.Args[int]) error {
-		fmt.Println("Worker 2 processing:", arg.Input)
-		return nil
-	})
+    workers := []async.Worker{
+        async.NewWorker(func(arg async.Args[int]) error {
+            fmt.Println("Worker 1 processing:", arg.Input)
+            return nil
+        }),
+        async.NewWorker(func(arg async.Args[int]) error {
+            fmt.Println("Worker 2 processing:", arg.Input)
+            return nil
+        }),
+    }
 
 	// Run workers asynchronously
-	pool.Go([]async.Worker{worker1, worker2}).Wait()
+	err := pool.Go(workers).Wait()
+    if err != nil {
+        panic("Oh no!")
+    }
 }
 ```
 
 ---
 
 ### Example with Retry and Limits
+
+#### Global Retry (Pool level)
 
 ```go
 package main
@@ -93,15 +100,55 @@ func main() {
 		WithLimit(5).        // limit concurrency
 		WithRetry(3, 500*time.Millisecond) // retry failed tasks
 
-	worker := async.NewWorker(func(arg async.Args[string]) error {
-		fmt.Println("Processing:", arg.Input)
-		if arg.Input == "fail" {
-			return errors.New("temporary failure")
-		}
-		return nil
-	})
+	workers := []async.Worker{
+        async.NewWorker(func(arg async.Args[string]) error {
+            fmt.Println("Processing:", arg.Input)
+            if arg.Input == "fail" {
+                return errors.New("temporary failure")
+            }
+            return nil
+        }),
+    }
 
-	pool.Go([]async.Worker{worker}).Wait()
+	pool.Go(workers).Wait()
+
+	if errs, hasErr := pool.Errors(); hasErr {
+		fmt.Println("Errors occurred:")
+		for _, e := range errs {
+			fmt.Println("-", e)
+		}
+	}
+}
+```
+
+#### Individual Retry (Worker level)
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/rubengp99/go-async"
+)
+
+func main() {
+	pool := async.NewPool[string]().
+		WithLimit(5).        // limit concurrency
+
+	workers := []async.Worker{
+        async.NewWorker(func(arg async.Args[string]) error {
+            fmt.Println("Processing:", arg.Input)
+            if arg.Input == "fail" {
+                return errors.New("temporary failure")
+            }
+            return nil
+        }).WithRetry(3, 500*time.Millisecond), // retry failed tasks
+    }
+
+	pool.Go(workers).Wait()
 
 	if errs, hasErr := pool.Errors(); hasErr {
 		fmt.Println("Errors occurred:")
@@ -129,16 +176,20 @@ import (
 func main() {
 	output := make(async.Drain[int], 10)
 
-	worker := async.NewWorker(func(arg async.Args[int]) error {
-		arg.Channel <- arg.Input * 2
-		return nil
-	}).DrainTo(output)
+	workers := []async.Worker{
+        async.NewWorker(func(arg async.Args[int]) error {
+            arg.Channel <- arg.Input * 2
+            return nil
+        }).DrainTo(output),
+    }
 
 	pool := async.NewPool[int]()
-	pool.Go([]async.Worker{worker}).Wait()
+	err := pool.Go(workers).Wait()
+    if err != nil {
+        panic("Oh no!")
+    }
 
 	// Shut down and drain output channel
-	worker.ShutDown()
 	results := output.Drain()
 
 	fmt.Println("Results:", results)
@@ -158,16 +209,19 @@ import (
 func main() {
 	output := make(async.Drain[int], 10)
 
-	worker := async.NewArguedWorker(func(arg async.Args[int]) error {
-		arg.Channel <- arg.Input * 2
-		return nil
-	}, async.Args[int]{Input: 5, Channel: output})
+	workers := []async.Worker{
+        async.NewArguedWorker(func(arg async.Args[int]) error {
+            arg.Channel <- arg.Input * 2
+            return nil
+        }, async.Args[int]{Input: 5, Channel: output}),
+    }
 
 	pool := async.NewPool[int]()
-	pool.Go([]async.Worker{worker}).Wait()
+	err := pool.Go(workers).Wait()
+    if err != nil {
+        panic("Oh no!")
+    }
 
-	// Shut down and drain output channel
-	worker.ShutDown()
 	results := output.Drain()
 
 	fmt.Println("Results:", results)

@@ -116,6 +116,37 @@ func main() {
 
 ### Example with Drainable Channel
 
+#### Worker without inputs
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/rubengp99/go-async"
+)
+
+func main() {
+	output := make(async.Drain[int], 10)
+
+	worker := async.NewWorker(func(arg async.Args[int]) error {
+		arg.Channel <- arg.Input * 2
+		return nil
+	}).DrainTo(output)
+
+	pool := async.NewPool[int]()
+	pool.Go([]async.Worker{worker}).Wait()
+
+	// Shut down and drain output channel
+	worker.ShutDown()
+	results := output.Drain()
+
+	fmt.Println("Results:", results)
+}
+```
+
+#### Worker with inputs
+
 ```go
 package main
 

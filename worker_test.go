@@ -28,6 +28,29 @@ func TestWorker(t *testing.T) {
 	})
 }
 
+func TestWorkerWithRetrySucceed(t *testing.T) {
+	numInvocations := 0
+
+	worker := async.NewTask(func(t async.Args[any]) error {
+		numInvocations++
+		if numInvocations < 3 {
+			return fmt.Errorf("error")
+		}
+
+		return nil
+	}).WithRetry(3, 100*time.Millisecond)
+
+	err := worker.Execute()
+
+	t.Run("No errors", func(t *testing.T) {
+		assert.NoError(t, err)
+	})
+
+	t.Run("3 request done", func(t *testing.T) {
+		assert.Equal(t, 3, numInvocations)
+	})
+}
+
 func TestWorkerWithRetry(t *testing.T) {
 	numInvocations := 0
 

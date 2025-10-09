@@ -8,12 +8,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write  # required for creating releases
+  contents: write  # required for creating releases and pushing badge updates
   actions: write
 
 jobs:
   test:
-    name: Run Tests & Check Coverage
+    name: Run Tests & Generate Coverage Badge
     runs-on: ubuntu-latest
 
     outputs:
@@ -48,10 +48,22 @@ jobs:
           fi
           echo "coverage=${total}" >> $GITHUB_OUTPUT
 
-      - name: Upload coverage for Free Code Coverage Action
-        uses: tj-actions/coverage@v1
+      - name: Generate coverage badge
+        uses: tj-actions/coverage-badge@v1
         with:
           path: coverage/coverage.out
+          output: coverage-badge.svg
+          min: 80
+          max: 100
+          color: brightgreen
+
+      - name: Commit coverage badge
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add coverage-badge.svg
+          git commit -m "Update coverage badge [skip ci]" || echo "No changes to commit"
+          git push
 
       - name: Upload coverage report artifact
         uses: actions/upload-artifact@v4
@@ -76,10 +88,8 @@ jobs:
         id: version
         run: |
           latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "Latest tag: $latest_tag"
           IFS='.' read -r major minor patch <<<"${latest_tag#v}"
           new_tag="v$major.$minor.$((patch + 1))"
-          echo "New tag: $new_tag"
           git tag "$new_tag"
           git push origin "$new_tag"
           echo "tag=$new_tag" >> $GITHUB_OUTPUT

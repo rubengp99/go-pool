@@ -45,15 +45,11 @@ func (p *Pool) Go(Tasks Workers) error {
 		})
 	}
 
-	var err error
-	// After launching all Tasks, run a goroutine that waits and shuts down drains
-	go func() {
-		err = p.group.Wait()
-		for _, w := range Tasks {
-			// shut down Tasks automatically to prevent memory leaks and channel deadlocks
-			w.ShutDown()
-		}
-	}()
+	err := p.group.Wait()
+	for _, w := range Tasks {
+		// shut down Tasks automatically to prevent memory leaks and channel deadlocks
+		w.ShutDown()
+	}
 
 	return err
 }

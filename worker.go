@@ -1,9 +1,8 @@
 package async
 
 import (
+	"math/rand"
 	"time"
-
-	"github.com/thedevsaddam/retry"
 )
 
 // Workers is the definition of a list of workers
@@ -61,12 +60,26 @@ func (t *Task[T]) ExecuteAndShutDown() error {
 
 // WithRetry wraps an Promise and returns a new Promise with retry logic
 func (t *Task[T]) WithRetry(attempts uint, sleep time.Duration) Worker {
+	fn := t.fn
 	return &Task[T]{
 		arg: t.arg,
 		fn: func(arg Args[T]) error {
-			return retry.DoFunc(attempts, sleep, func() error {
-				return t.fn(t.arg)
-			})
+			attempt := attempts
+			currentSleep := sleep
+
+			for {
+				err := fn(t.arg)
+				if attempt--; attempt == 0 {
+					return err
+				}
+
+				// Add jitter to prevent Thundering Herd problem
+				jitter := time.Duration(rand.Int63n(int64(currentSleep))) / 2
+				time.Sleep(currentSleep + jitter)
+
+				// Double the sleep time for next iteration (exponential backoff)
+				currentSleep *= 2
+			}
 		},
 	}
 }

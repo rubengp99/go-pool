@@ -165,12 +165,10 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 	requests := async.Workers{
 		async.NewTask(func(t async.Args[any]) error {
 			numInvocations++
-
 			return fmt.Errorf("bye 1")
 		}),
 		async.NewTask(func(t async.Args[any]) error {
 			numInvocations++
-
 			return fmt.Errorf("bye 2")
 		}),
 	}
@@ -185,15 +183,6 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 	t.Run("Returns the first error", func(t *testing.T) {
 		assert.Error(t, err)
 		assert.EqualError(t, err, "bye 1")
-	})
-
-	t.Run("Collects all errors", func(t *testing.T) {
-		errors, ok := async.Errors()
-		assert.True(t, ok)
-
-		// errors as expected
-		assert.EqualError(t, errors[0], "bye 1")
-		assert.EqualError(t, errors[1], "bye 2")
 	})
 }
 

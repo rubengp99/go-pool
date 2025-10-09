@@ -30,7 +30,7 @@ func NewDrainer[T any]() *Drain[T] {
 			select {
 			case v, ok := <-d.ch:
 				if !ok {
-					close(d.done)
+					d.ShutDown()
 					return
 				}
 				d.mutex.Lock()

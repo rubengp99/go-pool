@@ -48,22 +48,10 @@ jobs:
           fi
           echo "coverage=${total}" >> $GITHUB_OUTPUT
 
-      - name: Generate coverage badge
-        uses: tj-actions/coverage-badge@v1
+      - name: Go Coverage Badge  
+        uses: tj-actions/coverage-badge-go@v3
         with:
-          path: coverage/coverage.out
-          output: coverage-badge.svg
-          min: 80
-          max: 100
-          color: brightgreen
-
-      - name: Commit coverage badge
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add coverage-badge.svg
-          git commit -m "Update coverage badge [skip ci]" || echo "No changes to commit"
-          git push
+          filename: coverage.out
 
       - name: Upload coverage report artifact
         uses: actions/upload-artifact@v4

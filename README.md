@@ -2,7 +2,7 @@
 
 [![CI Status](https://github.com/rubengp99/go-async/actions/workflows/ci.yml/badge.svg)](https://github.com/rubengp99/go-async/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/rubengp99/go-async)](https://github.com/rubengp99/go-async/releases)
-[![Coverage](https://github.com/rubengp99/go-async/workflows/Coverage/badge.svg)](https://github.com/rubengp99/go-async/actions)
+[![Coverage](https://img.shields.io/badge/Coverage-100.0%25-brightgreen)](https://github.com/tj-actions/coverage-badge-go/actions/workflows/test.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rubengp99/go-async)](https://goreportcard.com/report/github.com/rubengp99/go-async)
 [![GoDoc](https://pkg.go.dev/badge/github.com/rubengp99/go-async)](https://pkg.go.dev/github.com/rubengp99/go-async)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/rubengp99/go-async/blob/dev/LICENSE.md)

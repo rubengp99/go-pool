@@ -101,7 +101,6 @@ jobs:
           generate_release_notes: true
           body: |
             🚀 **Automated Release**
-            - **Coverage:** ${{ needs.test.outputs.coverage }}%
             - **Triggered by:** [@${{ github.actor }}](https://github.com/${{ github.actor }})
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

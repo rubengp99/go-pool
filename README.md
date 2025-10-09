@@ -1,11 +1,11 @@
 # go-async 🌀
 
-[![Build Status](https://travis-ci.org/rubengp99/go-async.svg?branch=master)](https://travis-ci.org/rubengp99/go-async)
-[![Project status](https://img.shields.io/badge/version-1.2-green.svg)](https://github.com/rubengp99/go-async/releases)
+[![CI Status](https://github.com/rubengp99/go-async/actions/workflows/ci.yml/badge.svg)](https://github.com/rubengp99/go-async/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/rubengp99/go-async)](https://github.com/rubengp99/go-async/releases)
+[![Coverage](https://github.com/rubengp99/go-async/workflows/Coverage/badge.svg)](https://github.com/rubengp99/go-async/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rubengp99/go-async)](https://goreportcard.com/report/github.com/rubengp99/go-async)
-[![Coverage Status](https://coveralls.io/repos/github/rubengp99/go-async/badge.svg?branch=master)](https://coveralls.io/github/rubengp99/go-async?branch=master)
-[![GoDoc](https://godoc.org/github.com/rubengp99/go-async?status.svg)](https://pkg.go.dev/github.com/rubengp99/go-async)
-[![License](https://img.shields.io/dub/l/vibe-d.svg)](https://github.com/rubengp99/go-async/blob/dev/LICENSE.md)
+[![GoDoc](https://pkg.go.dev/badge/github.com/rubengp99/go-async)](https://pkg.go.dev/github.com/rubengp99/go-async)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/rubengp99/go-async/blob/dev/LICENSE.md)
 
 > A lightweight, type-safe, and retryable asynchronous worker pool for Go.
 

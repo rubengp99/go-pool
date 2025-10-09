@@ -39,16 +39,19 @@ jobs:
       - name: Check coverage threshold
         id: coverage
         run: |
-          total=$(go tool cover -func=coverage/coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
-          echo "Coverage: ${total}%"
+          total=$(go tool cover -func=coverage/coverage.out | grep total | awk '{print substr($3,1,length($3)-1)}')
+          printf "Coverage: %.1f%%\n" "$total"
           threshold=80.0
           if (( $(echo "$total < $threshold" | bc -l) )); then
-            echo "❌ Coverage below ${threshold}% (got ${total}%)"
+            printf '❌ Coverage below %.1f%% (got %.1f%%)\n' "$threshold" "$total"
             exit 1
-          else
-            echo "✅ Coverage is ${total}%, meets threshold"
           fi
           echo "coverage=${total}" >> $GITHUB_OUTPUT
+
+      - name: Upload coverage for Free Code Coverage Action
+        uses: tj-actions/coverage@v1
+        with:
+          path: coverage/coverage.out
 
       - name: Upload coverage report artifact
         uses: actions/upload-artifact@v4

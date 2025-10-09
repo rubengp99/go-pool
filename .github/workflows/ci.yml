@@ -30,7 +30,6 @@ jobs:
         id: coverage
         run: |
           go test -v ./... -covermode=count -coverprofile=coverage.out
-          go tool cover -func=coverage.out -o=coverage.out
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Coverage: $COVERAGE%"
           echo "coverage=$COVERAGE" >> $GITHUB_ENV
@@ -39,6 +38,7 @@ jobs:
             echo "Test coverage is below 80%, failing the build."
             exit 1
           fi
+          go tool cover -func=coverage.out -o=coverage.out
 
       - name: Go Coverage Badge
         uses: tj-actions/coverage-badge-go@v3
@@ -105,4 +105,4 @@ jobs:
             - **Triggered by:** [@${{ github.actor }}](https://github.com/${{ github.actor }})
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          coverage: ${{ needs.test.outputs.coverage }}
+          coverage: ${{ env.coverage }}

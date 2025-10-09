@@ -8,13 +8,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write  # required for creating releases
-  actions: read
+  contents: write  # needed for tagging and releasing
 
 jobs:
   test:
     name: Run Tests & Check Coverage
     runs-on: ubuntu-latest
+
+    outputs:
+      coverage: ${{ steps.coverage.outputs.coverage }}
 
     steps:
       - name: Checkout repository
@@ -64,8 +66,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Git
-        run: |
-          git fetch --tags
+        run: git fetch --tags
 
       - name: Bump version and create tag
         id: version
@@ -79,14 +80,15 @@ jobs:
           git push origin "$new_tag"
           echo "tag=$new_tag" >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release with Notes
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Release ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
           body: |
-            🚀 Automated release from CI.
-            - Coverage: ${{ needs.test.outputs.coverage }}%
-            - Triggered by: ${{ github.actor }}
+            🚀 **Automated Release**
+            - **Coverage:** ${{ needs.test.outputs.coverage }}%
+            - **Triggered by:** ${{ github.actor }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

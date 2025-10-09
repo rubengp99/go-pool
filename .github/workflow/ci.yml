@@ -1,0 +1,92 @@
+name: CI & Release
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # required for creating releases
+  actions: read
+
+jobs:
+  test:
+    name: Run Tests & Check Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Download dependencies
+        run: go mod tidy
+
+      - name: Run tests with coverage
+        run: |
+          mkdir -p coverage
+          go test ./... -coverprofile=coverage/coverage.out -covermode=atomic
+
+      - name: Check coverage threshold
+        id: coverage
+        run: |
+          total=$(go tool cover -func=coverage/coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Coverage: ${total}%"
+          threshold=80.0
+          if (( $(echo "$total < $threshold" | bc -l) )); then
+            echo "❌ Coverage below ${threshold}% (got ${total}%)"
+            exit 1
+          else
+            echo "✅ Coverage is ${total}%, meets threshold"
+          fi
+          echo "coverage=${total}" >> $GITHUB_OUTPUT
+
+      - name: Upload coverage report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/coverage.out
+
+  release:
+    name: Create Release
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Git
+        run: |
+          git fetch --tags
+
+      - name: Bump version and create tag
+        id: version
+        run: |
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $latest_tag"
+          IFS='.' read -r major minor patch <<<"${latest_tag#v}"
+          new_tag="v$major.$minor.$((patch + 1))"
+          echo "New tag: $new_tag"
+          git tag "$new_tag"
+          git push origin "$new_tag"
+          echo "tag=$new_tag" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
+          body: |
+            🚀 Automated release from CI.
+            - Coverage: ${{ needs.test.outputs.coverage }}%
+            - Triggered by: ${{ github.actor }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

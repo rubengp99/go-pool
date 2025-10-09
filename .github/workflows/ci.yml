@@ -9,7 +9,7 @@ on:
 
 permissions:
   contents: write  # required for creating releases
-  actions: read
+  actions: write
 
 jobs:
   test:

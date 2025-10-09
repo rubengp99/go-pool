@@ -262,7 +262,7 @@ go test ./... -v -cover
 Example output:
 
 ```
-ok  	github.com/rubengp99/go-async	0.153s	coverage: 97.5% of statements
+ok  	github.com/rubengp99/go-async	1.867s	coverage: 86.6% of statements
 ```
 
 ---
@@ -274,12 +274,6 @@ ok  	github.com/rubengp99/go-async	0.153s	coverage: 97.5% of statements
 - Protects drains with mutex locks
 - Auto-shutdown ensures no goroutine or channel leaks
 - Retry logic uses exponential backoff and jitter to prevent thundering herd effects
-
----
-
-## 🧭 License
-
-MIT © [RubenGP99](https://github.com/rubengp99)
 
 ---
 

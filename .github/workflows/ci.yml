@@ -1,11 +1,8 @@
-name: CI & Release
+name: Release
 
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
 
 permissions:
   contents: write  # required for creating releases and pushing badge updates
@@ -15,38 +12,6 @@ jobs:
   test:
     name: Run Tests & Generate Coverage Badge
     runs-on: ubuntu-latest
-
-    outputs:
-      coverage: ${{ steps.coverage.outputs.coverage }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Download dependencies
-        run: go mod tidy
-
-      - name: Run tests with coverage
-        run: |
-          mkdir -p coverage
-          go test ./... -coverprofile=coverage/coverage.out -covermode=atomic
-
-      - name: Check coverage threshold
-        id: coverage
-        run: |
-          total=$(go tool cover -func=coverage/coverage.out | grep total | awk '{print substr($3,1,length($3)-1)}')
-          printf "Coverage: %.1f%%\n" "$total"
-          threshold=80.0
-          if (( $(echo "$total < $threshold" | bc -l) )); then
-            printf '❌ Coverage below %.1f%% (got %.1f%%)\n' "$threshold" "$total"
-            exit 1
-          fi
-          echo "coverage=${total}" >> $GITHUB_OUTPUT
 
   release:
     name: Create Release

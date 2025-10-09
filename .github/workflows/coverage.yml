@@ -1,4 +1,4 @@
-name: Generate code coverage badge
+name: Test & Coverage
 
 on:
   push:
@@ -28,6 +28,12 @@ jobs:
         run: |
           go test -v ./... -covermode=count -coverprofile=coverage.out
           go tool cover -func=coverage.out -o=coverage.out
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Coverage: $COVERAGE%"
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "Test coverage is below 80%, failing the build."
+            exit 1
+          fi
 
       - name: Go Coverage Badge  # Pass the `coverage.out` output to this action
         uses: tj-actions/coverage-badge-go@v3
@@ -52,5 +58,5 @@ jobs:
         if: steps.verify-changed-files.outputs.files_changed == 'true'
         uses: ad-m/github-push-action@master
         with:
-          github_token: ${{ github.token }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}  # Use your PAT token stored in secrets
           branch: ${{ github.head_ref }}

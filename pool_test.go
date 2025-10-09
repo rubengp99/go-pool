@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rubengp99/go-commons/async"
+	"github.com/rubengp99/go-async"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -53,6 +53,12 @@ func (t *Task[T]) Execute() error {
 	return t.fn(t.arg)
 }
 
+// ExecuteAndShutDown runs the Promise with the provided parameter then shuts down the underlying worker
+func (t *Task[T]) ExecuteAndShutDown() error {
+	defer t.ShutDown()
+	return t.fn(t.arg)
+}
+
 // WithRetry wraps an Promise and returns a new Promise with retry logic
 func (t *Task[T]) WithRetry(attempts uint, sleep time.Duration) Worker {
 	return &Task[T]{

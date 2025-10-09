@@ -63,6 +63,12 @@ func (d *Drain[T]) Drain() []T {
 	return d.values
 }
 
+// DrainAndShutDown returns all collected values after the channel is closed automatically
+func (d *Drain[T]) DrainAndShutDown() []T {
+	d.ShutDown()
+	return d.Drain()
+}
+
 // ShutDown closes the underlying channel (should be called by pool/Task)
 func (d *Drain[T]) ShutDown() {
 	if d == nil {

@@ -1,4 +1,4 @@
-module github.com/rubengp99/go-commons/async
+module github.com/rubengp99/go-async
 
 go 1.25.0
 

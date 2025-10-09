@@ -5,7 +5,7 @@ on:
     branches: [ "main" ]
 
 permissions:
-  contents: write  # required for creating releases and pushing badge updates
+  contents: write
   actions: write
 
 jobs:
@@ -13,45 +13,38 @@ jobs:
     name: Run Tests & Generate Coverage Badge
     runs-on: ubuntu-latest
     outputs:
-      coverage: ${{ steps.coverage.outputs.coverage }}  # Pass coverage as output
+      coverage: ${{ steps.coverage.outputs.coverage }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Required to fetch all refs
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
 
-      - name: Run Tests
+      - name: Run Tests and Generate Coverage
         id: coverage
         run: |
-          # Run tests and generate the coverage profile
           go test -v ./... -covermode=count -coverprofile=coverage.out
-
-          # Extract the coverage percentage and clean it up (removes the '%' sign)
+          go tool cover -func=coverage.out -o=coverage.out
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
-
-          # Debug the extracted coverage value
           echo "Coverage: $COVERAGE%"
-
-          # Set coverage as an environment variable for the next job
           echo "coverage=$COVERAGE" >> $GITHUB_ENV
           echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
-
-          # Fail the build if coverage is below 80%
           if (( $(echo "$COVERAGE < 80" | bc -l) )); then
             echo "Test coverage is below 80%, failing the build."
             exit 1
           fi
 
-      - name: Go Coverage Badge  # Pass the `coverage.out` output to this action
+      - name: Go Coverage Badge
         uses: tj-actions/coverage-badge-go@v3
         with:
           filename: coverage.out
+          coverage: ${{ env.coverage }}
 
       - name: Verify Changed Files
         uses: tj-actions/verify-changed-files@v16
@@ -71,12 +64,12 @@ jobs:
         if: steps.verify-changed-files.outputs.files_changed == 'true'
         uses: ad-m/github-push-action@master
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}  # Use your PAT token stored in secrets
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ github.head_ref }}
 
   release:
     name: Create Release
-    needs: test  # Ensure this job runs after 'test' job
+    needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
@@ -84,7 +77,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Required to fetch tags
+          fetch-depth: 0
 
       - name: Fetch All Tags
         run: git fetch --tags
@@ -108,8 +101,8 @@ jobs:
           generate_release_notes: true
           body: |
             🚀 **Automated Release**
-            - **Coverage:** ${{ env.coverage }}%  # Pass coverage as an environment variable from the 'test' job
+            - **Coverage:** ${{ env.coverage }}%
             - **Triggered by:** [@${{ github.actor }}](https://github.com/${{ github.actor }})
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          coverage: ${{ needs.test.outputs.coverage }}  # Pass coverage from the `test` job as an env variable
+          coverage: ${{ needs.test.outputs.coverage }}

@@ -1,31 +1,20 @@
-# go-async
+# go-async 🌀
+> A lightweight, type-safe, and retryable asynchronous worker pool for Go.
 
-`go-async` is a **generic asynchronous Task and concurrency orchestration library** for Go, built on top of `errgroup.Group`.  
-It provides a type-safe API for running asynchronous Tasks (`Task`s) concurrently, with built-in retry logic, Task limits, and drainable channel support.
+`go-async` provides an elegant abstraction over `errgroup` and channels to manage concurrent workloads with automatic retry, draining, and safe shutdown.  
+It simplifies the orchestration of asynchronous tasks with generic type support and clean concurrency primitives.
 
 ---
 
 ## ✨ Features
 
-- ✅ Generic type support (`Pool[T any]`, `Task[T]`, `Args[T]`)
-- 🔁 Built-in retry logic for transient Task failures
-- ⚙️ Configurable Task limits
-- 📦 Safe error aggregation and retrieval
-- 🔄 Drainable channels for async data flow
-- 🧱 Simple and idiomatic Go API
-
----
-
-## 🧠 Core Concept
-
-At its heart, `go-async` is a **wrapper around `errgroup.Group`**, enhanced with:
-- A generic pool abstraction (`Pool[T]`)
-- Structured Tasks (`Task`, `Task[T]`)
-- Retry and backoff configuration
-- Optional channel-based data draining
-
-Each Task (Task) is executed asynchronously under the control of the `Pool`.  
-You can wait for all Tasks to complete, collect errors, and gracefully close the pool.
+- ✅ Type-safe generic workers (`Task[T]`)
+- 🧩 Graceful error handling with `errgroup`
+- 🔁 Built-in retry with exponential backoff and jitter
+- ⚡ Asynchronous channel draining (`Drain`)
+- 🧵 Automatic worker shutdown (no deadlocks)
+- 🔒 Mutex-protected data aggregation
+- 🧰 Support for functional composition (WithRetry, DrainTo, WithInput)
 
 ---
 
@@ -35,246 +24,349 @@ You can wait for all Tasks to complete, collect errors, and gracefully close the
 go get github.com/rubengp99/go-async
 ```
 
-Then import:
+---
 
-```go
-import "github.com/rubengp99/go-async"
-```
+## 🧠 Concept Overview
+
+### 🧱 Core Abstractions
+
+| Type | Description |
+|------|--------------|
+| `Task[T]` | Represents a unit of work (async function). |
+| `Pool` | Manages concurrent execution using `errgroup`. |
+| `Drain[T]` | Collects results asynchronously via channels. |
+| `Args[T]` | Passes input and drainer references to each worker. |
+| `Worker` | Interface for executable, retryable, and drainable tasks. |
 
 ---
 
-## 🚀 Usage Examples
+## ⚙️ How It Works
 
-### 🧠 Basic Example
+The `Pool` manages multiple `Worker`s concurrently.  
+Each `Worker` wraps a `Task[T]` — a generic function that operates over typed arguments and can emit results to a `Drain[T]`.
+
+When `Pool.Go()` is called:
+1. Each worker is executed in a separate goroutine via `errgroup`.
+2. The pool tracks and collects any errors.
+3. Each worker's `Drain` runs asynchronously to receive values.
+4. When execution completes, all channels are closed automatically.
+
+---
+
+## 🧩 Example Usage
+
+### 1️⃣ Basic Concurrent Tasks
 
 ```go
 package main
 
 import (
-	"fmt"
-	"github.com/rubengp99/go-async"
-)
-
-func main() {
-	pool := async.NewPool[int]()
-
-	// Create Tasks
-    Tasks := []async.Task{
-        async.NewTask(func(arg async.Args[int]) error {
-            fmt.Println("Task 1 processing:", arg.Input)
-            return nil
-        }),
-        async.NewTask(func(arg async.Args[int]) error {
-            fmt.Println("Task 2 processing:", arg.Input)
-            return nil
-        }),
-    }
-
-	// Run Tasks asynchronously
-	err := pool.Go(Tasks).Wait()
-    if err != nil {
-        panic("Oh no!")
-    }
-}
-```
-
----
-
-### 🔁 Example with Retry and Limits
-
-#### ⚙️ Global Retry (Pool level)
-
-```go
-package main
-
-import (
-	"errors"
 	"fmt"
 	"time"
-
 	"github.com/rubengp99/go-async"
 )
 
-func main() {
-	pool := async.NewPool[string]().
-		WithLimit(5).        // limit concurrency
-		WithRetry(3, 500*time.Millisecond) // retry failed Tasks
-
-	Tasks := []async.Task{
-        async.NewTask(func(arg async.Args[string]) error {
-            fmt.Println("Processing:", arg.Input)
-            if arg.Input == "fail" {
-                return errors.New("temporary failure")
-            }
-            return nil
-        }),
-    }
-
-	pool.Go(Tasks).Wait()
-
-	if errs, hasErr := pool.Errors(); hasErr {
-		fmt.Println("Errors occurred:")
-		for _, e := range errs {
-			fmt.Println("-", e)
-		}
-	}
+type User struct {
+	Name string
 }
-```
-
-#### 🧩 Individual Retry (Task level)
-
-```go
-package main
-
-import (
-	"errors"
-	"fmt"
-	"time"
-
-	"github.com/rubengp99/go-async"
-)
 
 func main() {
-	pool := async.NewPool[string]().
-		WithLimit(5).        // limit concurrency
+	output := async.NewDrainer[User]() // output collector
 
-	Tasks := []async.Task{
-        async.NewTask(func(arg async.Args[string]) error {
-            fmt.Println("Processing:", arg.Input)
-            if arg.Input == "fail" {
-                return errors.New("temporary failure")
-            }
-            return nil
-        }).WithRetry(3, 500*time.Millisecond), // retry failed Tasks
-    }
+	task := async.NewTask(func(t async.Args[User]) error {
+		t.Drainer.Send(User{Name: "Alice"})
+		return nil
+	}).DrainTo(output)
 
-	pool.Go(Tasks).Wait()
+	pool := async.NewPool()
+	defer pool.Close()
 
-	if errs, hasErr := pool.Errors(); hasErr {
-		fmt.Println("Errors occurred:")
-		for _, e := range errs {
-			fmt.Println("-", e)
-		}
+	err = pool.Go(async.Workers{task})
+	if err != nil {
+		panic("Oh no!")
 	}
-}
-```
 
----
-
-### 📤 Example with Drainable Channel
-
-```go
-package main
-
-import (
-	"fmt"
-	"github.com/rubengp99/go-async"
-)
-
-func main() {
-	output := make(async.Drain[int], 10)
-
-	Tasks := []async.Task{
-        async.NewTask(func(arg async.Args[int]) error {
-            arg.Channel <- arg.Input * 2
-            return nil
-        }).DrainTo(output),
-    }
-
-	pool := async.NewPool[int]()
-	err := pool.Go(Tasks).Wait()
-    if err != nil {
-        panic("Oh no!")
-    }
-
-	// Shut down and drain output channel
 	results := output.Drain()
+	fmt.Println("Results:", results[0].Name)
+}
+```
 
-	fmt.Println("Results:", results)
+**Output:**
+```
+Results: Alice
+```
+
+---
+
+### 2️⃣ With Retry Logic
+
+```go
+var numRetries int
+
+task := async.NewTask(func(t async.Args[any]) error {
+	numRetries++
+	if numRetries < 3 {
+		return fmt.Errorf("transient error")
+	}
+	fmt.Println("Success on attempt:", numRetries)
+	return nil
+}).WithRetry(3, 200*time.Millisecond)
+
+pool := async.NewPool()
+err = pool.Go(async.Workers{task})
+if err != nil {
+	panic("Oh no!")
+}
+```
+
+**Output:**
+```
+Success on attempt: 3
+```
+
+---
+
+### 3️⃣ Multiple Tasks with Different Output Types
+
+```go
+type A struct { Value string }
+type B struct { Value float32 }
+
+outA := async.NewDrainer[A]()
+outB := async.NewDrainer[B]()
+
+t1 := async.NewTask(func(t async.Args[A]) error {
+	t.Drainer.Send(A{Value: "Hello"})
+	return nil
+}).DrainTo(outA)
+
+t2 := async.NewTask(func(t async.Args[B]) error {
+	t.Drainer.Send(B{Value: 42.5})
+	return nil
+}).DrainTo(outB)
+
+pool := async.NewPool()
+err = pool.Go(async.Workers{t1, t2})
+if err != nil {
+	panic("Oh no!")
+}
+
+fmt.Println("A:", outA.Drain())
+fmt.Println("B:", outB.Drain())
+```
+
+---
+
+### 4️⃣ Global Retry Policy
+
+You can also apply retry logic at the pool level:
+
+```go
+pool := async.NewPool().WithRetry(3, 100*time.Millisecond)
+err = pool.Go(async.Workers{
+	async.NewTask(func(t async.Args[any]) error {
+		return fmt.Errorf("fail")
+	}),
+})
+
+if err != nil {
+	panic("Oh no!")
 }
 ```
 
 ---
 
-## ⚙️ API Overview
+## 🧰 Interfaces
 
-### 🧩 Pool
+### `Worker`
+```go
+type Worker interface {
+	Executable
+	Retryable
+	Drainable
+}
+```
+
+### `Executable`
+```go
+type Executable interface {
+	Execute() error
+}
+```
+
+### `Retryable`
+```go
+type Retryable interface {
+	WithRetry(attempts uint, sleep time.Duration) Worker
+}
+```
+
+### `Drainable`
+```go
+type Drainable interface {
+	ShutDown()
+}
+```
+
+---
+
+## 🧱 Structs and Functions
+
+### `Task[T]`
+Represents a single asynchronous operation.
 
 | Method | Description |
-|---------|-------------|
-| `NewPool[T any]()` | Creates a new generic pool with a background context |
-| `NewPoolWithContext[T any](ctx context.Context)` | Creates a pool tied to a custom context |
-| `(*Pool[T]) Go(Tasks []Task)` | Runs provided Tasks asynchronously |
-| `(*Pool[T]) Wait() error` | Waits for all Tasks to finish, returning first error if any |
-| `(*Pool[T]) Errors() ([]error, bool)` | Returns all collected errors and a flag if any occurred |
-| `(*Pool[T]) WithLimit(limit int)` | Sets concurrency limit for Tasks |
-| `(*Pool[T]) WithRetry(attempts uint, sleep time.Duration)` | Enables retry logic for all Tasks in the pool |
-| `(*Pool[T]) Close()` | Closes pool context and prevents leaks |
+|---------|--------------|
+| `Execute()` | Executes the wrapped function. |
+| `ExecuteAndShutDown()` | Executes and closes the drain automatically. |
+| `WithRetry(attempts, sleep)` | Adds retry logic (exponential backoff + jitter). |
+| `DrainTo(d *Drain[T])` | Sends outputs to a drain. |
+| `WithInput(input *T)` | Provides an input reference to the task. |
+| `ShutDown()` | Closes the drainer channel safely. |
 
 ---
 
-### 🧱 Task and Task
+### `Pool`
+A concurrent execution environment built on `errgroup.Group`.
 
-| Function | Description |
-|-----------|-------------|
-| `NewTask[T](fn func(arg Args[T]) error)` | Creates a new Task without an argument |
-| `(*Task[T]) Execute() error` | Executes the Task function |
-| `(*Task[T]) WithRetry(attempts uint, sleep time.Duration)` | Adds retry logic to the Task |
-| `(*Task[T]) DrainTo(c Drain[T]) Task` | Directs output to a channel |
-| `(*Task[T]) ShutDown()` | Closes output channel safely |
-
----
-
-### 🔄 Drain
-
-| Type / Function | Description |
-|------------------|-------------|
-| `type Drain[T] chan T` | Generic output channel type |
-| `(d Drain[T]) Drain() []T` | Collects all values from the drain channel into a slice |
+| Method | Description |
+|---------|--------------|
+| `Go(Tasks Workers)` | Runs all tasks concurrently. |
+| `WithRetry(attempts, sleep)` | Configures a global retry policy. |
+| `WithLimit(limit)` | Limits parallelism (defaults to 1 during tests). |
+| `Errors()` | Returns collected errors and a boolean flag. |
+| `Close()` | Gracefully closes pool and cancels context. |
 
 ---
 
-## 🧩 Interfaces
+### `Drain[T]`
+Collects results asynchronously via a channel.
 
-| Interface | Description |
-|------------|-------------|
-| `Task` | Combines `Executable` and `Retryable` |
-| `Executable` | Must implement `Execute() error` |
-| `Retryable` | Must implement `WithRetry(attempts, sleep)` |
-| `Drainable` | Must implement `ShutDown()` |
-
----
-
-## 🧠 How It Works
-
-1. Each `Pool` wraps a `errgroup.Group` with an associated `context.Context`.
-2. Tasks (`Task[T]`) implement `Execute()` to perform async work.
-3. When `.Go()` is called:
-   - Each Task is launched as a goroutine managed by `errgroup`.
-   - Retries (if configured) are applied per Task.
-   - Errors are collected safely via mutex protection.
-4. `.Wait()` blocks until all Tasks complete.
-5. `.Errors()` retrieves aggregated errors.
+| Method | Description |
+|---------|--------------|
+| `Send(input T)` | Sends a value to the channel. |
+| `Drain()` | Returns all values after the channel closes. |
+| `ShutDown()` | Safely closes the channel. |
+| `DrainAndShutDown()` | Closes then returns collected values. |
 
 ---
 
-## 🧪 Testing
+## 🧪 Tests and Coverage
+
+Run tests and see detailed coverage:
 
 ```bash
-go test ./...
+go test ./... -v -cover
 ```
 
-If the environment variable `STAGE=test`, pool concurrency is automatically limited to 1 to ensure deterministic results.
+Example output:
+
+```
+ok  	github.com/rubengp99/go-async	0.153s	coverage: 97.5% of statements
+```
 
 ---
 
-## ⚠️ Notes & Best Practices
+## ⚡ Internal Design Highlights
 
-- Always call `Wait()` to ensure all Tasks complete before exit.  
-- Avoid submitting new Tasks after cancellation or `Close()`.  
-- Use `.WithRetry()` for network or transient operations.  
-- When using `Drain`, always call `ShutDown()` before draining to close the channel.  
-- For heavy workloads, tune `WithLimit()` according to CPU cores or I/O concurrency.
+- Uses `errgroup.Group` for structured concurrency
+- Automatically limits concurrency during tests via `STAGE=test`
+- Protects drains with mutex locks
+- Auto-shutdown ensures no goroutine or channel leaks
+- Retry logic uses exponential backoff and jitter to prevent thundering herd effects
+
+---
+
+## 🧭 License
+
+MIT © [RubenGP99](https://github.com/rubengp99)
+
+---
+
+## 💬 Summary
+
+`go-async` is built for modern Go developers who want concurrency that’s:
+- **Readable**
+- **Type-safe**
+- **Deterministic**
+- **Retry-aware**
+- **Leak-free**
+
+Use it to structure background jobs, batched network calls, or concurrent pipelines cleanly and safely.
+
+---
+
+## ⚠️ Notes and Best Practices
+
+### General
+- **Graceful Shutdown**  
+  Always ensure that each `Drain` or `Task` is properly shut down using `ShutDown()` or `ExecuteAndShutDown()` to avoid **memory leaks** or **goroutine deadlocks**.  
+  Pools automatically shut down all tasks after execution, but manual shutdown may still be needed in certain cases.
+
+- **Thread Safety**  
+  Shared slices and maps (like `Drain.values` and `Pool.errors`) are guarded by mutexes. Do **not** access or modify them directly. Use the provided methods instead.
+
+- **Avoid Blocking on Channels**  
+  Always close channels via `ShutDown()`—never directly with `close()`. The internal goroutines depend on structured shutdown signaling.
+
+---
+
+### Drainer (`Drain`)
+- Use `NewDrainer[T]()` to create a safe asynchronous collector for values of type `T`.
+- Write values to the drain using:
+  ```go
+  d.Channel() <- value
+  // or
+  d.Send(value)
+  ```
+- To collect results safely:
+  ```go
+  results := d.Drain() // waits until closed
+  ```
+- **Do not manually close the channel.** Use `d.ShutDown()` or `DrainAndShutDown()`.
+
+- The internal goroutine uses a small sleep (`1ms`) in a select loop to reduce CPU load while polling the channel. For performance-critical use cases, consider adapting this interval.
+
+---
+
+### Task and Worker Management
+- Always use `NewTask[T](fn)` to wrap your async function:
+  ```go
+  task := NewTask(func(arg Args[int]) error {
+      fmt.Println(*arg.Input)
+      return nil
+  })
+  ```
+- Configure inputs and drains fluently:
+  ```go
+  task.WithInput(&myInput).DrainTo(myDrain)
+  ```
+- Use `ExecuteAndShutDown()` for one-off task execution, ensuring resources are released automatically.
+
+---
+
+### Pool
+- Use `NewPool()` to create a concurrent execution group using `errgroup.Group`.
+- To limit concurrency:
+  ```go
+  pool := NewPool().WithLimit(4)
+  ```
+- To enable retries with exponential backoff and jitter:
+  ```go
+  pool := NewPool().WithRetry(3, 100*time.Millisecond)
+  ```
+- Collect errors after execution:
+  ```go
+  errs, hasErrs := pool.Errors()
+  if hasErrs { /* handle errors */ }
+  ```
+- Always call `pool.Close()` when done, especially in long-lived applications.
+
+---
+
+### Testing Considerations
+- When `STAGE=test` (via environment variable), all pools automatically limit concurrency to `1` to ensure **deterministic test behavior**.
+- This prevents nondeterministic interleaving of goroutines that could cause flaky test results.
 
 ---
 

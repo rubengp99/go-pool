@@ -12,24 +12,29 @@ jobs:
   test:
     name: Run Tests & Generate Coverage Badge
     runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{ steps.coverage.outputs.coverage }}  # Pass coverage as output
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
-      
-      - name: Setup go
+          fetch-depth: 0  # Required to fetch all refs
+
+      - name: Setup Go
         uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
 
       - name: Run Test
+        id: coverage
         run: |
           go test -v ./... -covermode=count -coverprofile=coverage.out
           go tool cover -func=coverage.out -o=coverage.out
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Coverage: $COVERAGE%"
+          echo "coverage=$COVERAGE" >> $GITHUB_ENV  # Set coverage as an environment variable
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT  # Pass coverage to outputs
           if (( $(echo "$COVERAGE < 80" | bc -l) )); then
             echo "Test coverage is below 80%, failing the build."
             exit 1
@@ -63,7 +68,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: test
+    needs: test  # Ensure this job runs after 'test' job
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
@@ -71,8 +76,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
-          
+          fetch-depth: 0  # Required to fetch tags
+
       - name: Fetch all tags
         run: git fetch --tags
 
@@ -91,10 +96,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: Release ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
           generate_release_notes: true
           body: |
             🚀 **Automated Release**
+            - **Coverage:** ${{ needs.test.outputs.coverage }}%
             - **Triggered by:** ${{ github.actor }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

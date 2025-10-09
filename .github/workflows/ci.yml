@@ -29,12 +29,20 @@ jobs:
       - name: Run Test
         id: coverage
         run: |
+          # Run tests and generate the coverage profile
           go test -v ./... -covermode=count -coverprofile=coverage.out
-          go tool cover -func=coverage.out -o=coverage.out
+          
+          # Extract the coverage percentage and clean it up (removes the '%' sign)
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+
+          # Debug the extracted coverage value
           echo "Coverage: $COVERAGE%"
+          
+          # Set coverage as an environment variable for the next job
           echo "coverage=$COVERAGE" >> $GITHUB_ENV  # Set coverage as an environment variable
           echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT  # Pass coverage to outputs
+
+          # Fail the build if coverage is below 80%
           if (( $(echo "$COVERAGE < 80" | bc -l) )); then
             echo "Test coverage is below 80%, failing the build."
             exit 1
@@ -100,7 +108,7 @@ jobs:
           generate_release_notes: true
           body: |
             🚀 **Automated Release**
-            - **Coverage:** ${{ env.coverage }}%
+            - **Coverage:** ${{ env.coverage }}%  # Pass coverage as an environment variable from the 'test' job
             - **Triggered by:** ${{ github.actor }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

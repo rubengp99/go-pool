@@ -6,8 +6,11 @@ import (
 	"github.com/thedevsaddam/retry"
 )
 
-// NewWorker creates a new worker of type T
-func NewWorker[T any](f func(arg Args[T]) error) *Task[T] {
+// Workers is the definition of a list of workers
+type Workers []Worker
+
+// NewTask creates a new Task of type T
+func NewTask[T any](f func(arg Args[T]) error) *Task[T] {
 	return &Task[T]{
 		fn: f,
 	}
@@ -15,6 +18,12 @@ func NewWorker[T any](f func(arg Args[T]) error) *Task[T] {
 
 // Promise is a function that takes a generic type T and returns an error
 type Promise[T any] func(arg Args[T]) error
+
+// Args represents Task Args
+type Args[T any] struct {
+	Input   *T
+	Drainer *Drain[T]
+}
 
 // Worker is an interface that wraps an async function with any type of parameter
 type Worker interface {
@@ -33,13 +42,7 @@ type Retryable interface {
 	WithRetry(attempts uint, sleep time.Duration) Worker
 }
 
-// Args represents task Args
-type Args[T any] struct {
-	Input   *T
-	Channel chan<- T
-}
-
-// Task is a task wrapper around Promise to conform to the Worker interface
+// Task is a Task wrapper around Promise to conform to the Task interface
 type Task[T any] struct {
 	fn  Promise[T]
 	arg Args[T]
@@ -62,21 +65,19 @@ func (t *Task[T]) WithRetry(attempts uint, sleep time.Duration) Worker {
 	}
 }
 
-// ShutDown shuts down the underlying channel communication
+// ShutDown shuts down the underlying Drainer communication
 func (t *Task[T]) ShutDown() {
-	if t.arg.Channel != nil {
-		close(t.arg.Channel)
-	}
+	t.arg.Drainer.ShutDown()
 }
 
-// DrainTo defines channel output of the current worker
-func (t *Task[T]) DrainTo(c *Drain[T]) Worker {
-	t.arg.Channel = c.Channel()
+// DrainTo defines Drainer output of the current Task
+func (t *Task[T]) DrainTo(c *Drain[T]) *Task[T] {
+	t.arg.Drainer = c
 	return t
 }
 
-// WithInput defines input of the current worker
-func (t *Task[T]) WithInput(c *T) Worker {
+// WithInput defines input of the current Task
+func (t *Task[T]) WithInput(c *T) *Task[T] {
 	t.arg.Input = c
 	return t
 }

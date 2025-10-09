@@ -1,7 +1,6 @@
 package async
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -36,7 +35,6 @@ func NewDrainer[T any]() *Drain[T] {
 				}
 				d.mutex.Lock()
 				d.values = append(d.values, v)
-				fmt.Print(v)
 				d.mutex.Unlock()
 			default:
 				time.Sleep(1 * time.Millisecond)
@@ -52,6 +50,11 @@ func (d *Drain[T]) Channel() chan<- T {
 	return d.ch
 }
 
+// Send sends our value to the underlying channel
+func (d *Drain[T]) Send(input T) {
+	d.ch <- input
+}
+
 // Drain returns all collected values after the channel is closed
 func (d *Drain[T]) Drain() []T {
 	<-d.done
@@ -60,7 +63,21 @@ func (d *Drain[T]) Drain() []T {
 	return d.values
 }
 
-// ShutDown closes the underlying channel (should be called by pool/worker)
+// ShutDown closes the underlying channel (should be called by pool/Task)
 func (d *Drain[T]) ShutDown() {
-	close(d.ch)
+	if d == nil {
+		return
+	}
+
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	select {
+	case <-d.done:
+		// Already closed, do nothing
+	default:
+		// Protect against multiple close calls
+		close(d.ch)
+		close(d.done)
+	}
 }

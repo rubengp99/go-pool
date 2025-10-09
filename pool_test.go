@@ -10,6 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func init() {
+	os.Setenv("STAGE", "test")
+}
+
 type typeA struct {
 	value string
 }
@@ -26,13 +30,13 @@ func TestConcurrentClient(t *testing.T) {
 		return nil
 	}
 
-	requests := []async.Worker{
-		async.NewWorker(tFunc),
-		async.NewWorker(tFunc),
-		async.NewWorker(tFunc),
+	requests := async.Workers{
+		async.NewTask(tFunc),
+		async.NewTask(tFunc),
+		async.NewTask(tFunc),
 	}
 
-	async := async.NewPool[any]()
+	async := async.NewPool()
 	defer async.Close()
 	err := async.Go(requests)
 
@@ -53,16 +57,16 @@ func TestConcurrentClientWithError(t *testing.T) {
 		return nil
 	}
 
-	requests := []async.Worker{
-		async.NewWorker(tFunc),
-		async.NewWorker(func(t async.Args[any]) error {
+	requests := async.Workers{
+		async.NewTask(tFunc),
+		async.NewTask(func(t async.Args[any]) error {
 			numInvocations++
 			return fmt.Errorf("bye")
 		}),
-		async.NewWorker(tFunc),
+		async.NewTask(tFunc),
 	}
 
-	async := async.NewPool[any]()
+	async := async.NewPool()
 	defer async.Close()
 	err := async.Go(requests)
 
@@ -85,11 +89,11 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 		return nil
 	}
 
-	requests := []async.Worker{
-		async.NewWorker(tFunc),
-		async.NewWorker(tFunc),
-		async.NewWorker(tFunc),
-		async.NewWorker(func(t async.Args[any]) error {
+	requests := async.Workers{
+		async.NewTask(tFunc),
+		async.NewTask(tFunc),
+		async.NewTask(tFunc),
+		async.NewTask(func(t async.Args[any]) error {
 			numInvocations++
 
 			if numRetries < 2 {
@@ -101,7 +105,7 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 		}).WithRetry(3, 100*time.Millisecond),
 	}
 
-	async := async.NewPool[any]()
+	async := async.NewPool()
 	defer async.Close()
 	err := async.Go(requests)
 	t.Run("6 requests done", func(t *testing.T) {
@@ -121,16 +125,16 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 	numInvocations := 0
 	numRetries := 0
 
-	atFunc := async.NewWorker(func(t async.Args[any]) error {
+	atFunc := async.NewTask(func(t async.Args[any]) error {
 		numInvocations++
 		return nil
 	})
 
-	requests := []async.Worker{
+	requests := async.Workers{
 		atFunc,
 		atFunc,
 		atFunc,
-		async.NewWorker(func(t async.Args[any]) error {
+		async.NewTask(func(t async.Args[any]) error {
 			numInvocations++
 			numRetries++
 
@@ -138,7 +142,7 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 		}).WithRetry(3, 100*time.Millisecond),
 	}
 
-	async := async.NewPool[any]()
+	async := async.NewPool()
 	defer async.Close()
 	err := async.Go(requests)
 	t.Run("6 requests done", func(t *testing.T) {
@@ -156,23 +160,22 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 }
 
 func TestConcurrentClientWithAllRetry(t *testing.T) {
-	os.Setenv("STAGE", "test")
 	numInvocations := 0
 
-	requests := []async.Worker{
-		async.NewWorker(func(t async.Args[any]) error {
+	requests := async.Workers{
+		async.NewTask(func(t async.Args[any]) error {
 			numInvocations++
 
 			return fmt.Errorf("bye 1")
 		}),
-		async.NewWorker(func(t async.Args[any]) error {
+		async.NewTask(func(t async.Args[any]) error {
 			numInvocations++
 
 			return fmt.Errorf("bye 2")
 		}),
 	}
 
-	async := async.NewPool[any]().WithRetry(3, 100*time.Millisecond)
+	async := async.NewPool().WithRetry(3, 100*time.Millisecond)
 	defer async.Close()
 	err := async.Go(requests)
 	t.Run("6 requests done", func(t *testing.T) {
@@ -194,26 +197,25 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 	})
 }
 
-func TestConcurrentClientWithWorkerChannel(t *testing.T) {
+func TestConcurrentClientWithTaskChannel(t *testing.T) {
 	numInvocations := 0
 
-	// Number of workers = 1 (can increase if needed)
 	output := async.NewDrainer[typeA]() // auto-buffered channel
 
 	tFunc := func(t async.Args[typeA]) error {
 		numInvocations++
-		t.Channel <- typeA{value: "hello-world!"}
+		t.Drainer.Send(typeA{value: "hello-world!"})
 		return nil
 	}
 
-	requests := []async.Worker{
-		async.NewWorker(tFunc).DrainTo(output),
+	requests := async.Workers{
+		async.NewTask(tFunc).DrainTo(output),
 	}
 
-	asyncPool := async.NewPool[typeA]()
+	asyncPool := async.NewPool()
 	defer asyncPool.Close()
 
-	// Run the worker(s)
+	// Run the Task(s)
 	err := asyncPool.Go(requests)
 
 	// Collect results safely
@@ -231,5 +233,203 @@ func TestConcurrentClientWithWorkerChannel(t *testing.T) {
 		if assert.Equal(t, 1, len(results)) {
 			assert.Equal(t, "hello-world!", results[0].value)
 		}
+	})
+}
+
+func TestConcurrentClientWith2WorkersameChannel(t *testing.T) {
+	numInvocations := 0
+
+	output := async.NewDrainer[typeA]() // auto-buffered channel
+
+	tFunc := func(t async.Args[typeA]) error {
+		numInvocations++
+		t.Drainer.Send(typeA{value: "hello-world!"})
+		return nil
+	}
+
+	tFunc2 := func(t async.Args[typeA]) error {
+		numInvocations++
+		t.Drainer.Send(typeA{value: "hello-world!2"})
+		return nil
+	}
+
+	requests := async.Workers{
+		async.NewTask(tFunc).DrainTo(output),
+		async.NewTask(tFunc2).DrainTo(output),
+	}
+
+	asyncPool := async.NewPool()
+	defer asyncPool.Close()
+
+	// Run the Task(s)
+	err := asyncPool.Go(requests)
+
+	// Collect results safely
+	results := output.Drain()
+
+	t.Run("No errors", func(t *testing.T) {
+		assert.NoError(t, err)
+	})
+
+	t.Run("2 request done", func(t *testing.T) {
+		assert.Equal(t, 2, numInvocations)
+	})
+
+	t.Run("results drained", func(t *testing.T) {
+		if assert.Equal(t, 2, len(results)) {
+			assert.Equal(t, "hello-world!", results[0].value)
+			assert.Equal(t, "hello-world!2", results[1].value)
+		}
+	})
+}
+
+func TestConcurrentClientWith2TaskDiffTypes(t *testing.T) {
+	numInvocations := 0
+
+	output := async.NewDrainer[typeA]()  // auto-buffered channel
+	output2 := async.NewDrainer[typeB]() // auto-buffered channel
+
+	tFunc := func(t async.Args[typeA]) error {
+		numInvocations++
+		t.Drainer.Send(typeA{value: "hello-world!"})
+		return nil
+	}
+
+	tFunc2 := func(t async.Args[typeB]) error {
+		numInvocations++
+		t.Drainer.Send(typeB{value: 2000.75})
+		return nil
+	}
+
+	requests := async.Workers{
+		async.NewTask(tFunc).DrainTo(output),
+		async.NewTask(tFunc2).DrainTo(output2),
+	}
+
+	asyncPool := async.NewPool()
+	defer asyncPool.Close()
+
+	// Run the Task(s)
+	err := asyncPool.Go(requests)
+
+	// Collect results safely
+	results := output.Drain()
+	results2 := output2.Drain()
+
+	t.Run("No errors", func(t *testing.T) {
+		assert.NoError(t, err)
+	})
+
+	t.Run("2 request done", func(t *testing.T) {
+		assert.Equal(t, 2, numInvocations)
+	})
+
+	t.Run("results drained", func(t *testing.T) {
+		if assert.Equal(t, 1, len(results)) {
+			assert.Equal(t, "hello-world!", results[0].value)
+		}
+
+		if assert.Equal(t, 1, len(results2)) {
+			assert.Equal(t, float32(2000.75), results2[0].value)
+		}
+	})
+}
+
+func TestConcurrentClientWith2TaskDiffTypes1Output(t *testing.T) {
+	numInvocations := 0
+
+	output := async.NewDrainer[typeA]() // auto-buffered channel
+
+	tFunc := func(t async.Args[typeA]) error {
+		numInvocations++
+		t.Drainer.Send(typeA{value: "hello-world!"})
+		return nil
+	}
+
+	tFunc2 := func(t async.Args[typeB]) error {
+		numInvocations++
+		return nil
+	}
+
+	requests := async.Workers{
+		async.NewTask(tFunc).DrainTo(output),
+		async.NewTask(tFunc2),
+	}
+
+	asyncPool := async.NewPool()
+	defer asyncPool.Close()
+
+	// Run the Task(s)
+	err := asyncPool.Go(requests)
+
+	// Collect results safely
+	results := output.Drain()
+
+	t.Run("No errors", func(t *testing.T) {
+		assert.NoError(t, err)
+	})
+
+	t.Run("2 request done", func(t *testing.T) {
+		assert.Equal(t, 2, numInvocations)
+	})
+
+	t.Run("results drained", func(t *testing.T) {
+		if assert.Equal(t, 1, len(results)) {
+			assert.Equal(t, "hello-world!", results[0].value)
+		}
+	})
+}
+
+func TestConcurrentClientWith2TaskDiffTypes1Output1Input(t *testing.T) {
+	numInvocations := 0
+	initial := typeB{
+		value: 2000,
+	}
+	output := async.NewDrainer[typeA]() // auto-buffered channel
+
+	tFunc := func(t async.Args[typeA]) error {
+		numInvocations++
+		t.Drainer.Send(typeA{value: "hello-world!"})
+		return nil
+	}
+
+	tFunc2 := func(t async.Args[typeB]) error {
+		numInvocations++
+
+		// update
+		t.Input.value = 3500
+		return nil
+	}
+
+	requests := async.Workers{
+		async.NewTask(tFunc).DrainTo(output),
+		async.NewTask(tFunc2).WithInput(&initial),
+	}
+
+	asyncPool := async.NewPool()
+	defer asyncPool.Close()
+
+	// Run the Task(s)
+	err := asyncPool.Go(requests)
+
+	// Collect results safely
+	results := output.Drain()
+
+	t.Run("No errors", func(t *testing.T) {
+		assert.NoError(t, err)
+	})
+
+	t.Run("2 request done", func(t *testing.T) {
+		assert.Equal(t, 2, numInvocations)
+	})
+
+	t.Run("results drained", func(t *testing.T) {
+		if assert.Equal(t, 1, len(results)) {
+			assert.Equal(t, "hello-world!", results[0].value)
+		}
+	})
+
+	t.Run("input updated", func(t *testing.T) {
+		assert.Equal(t, float32(3500), initial.value)
 	})
 }

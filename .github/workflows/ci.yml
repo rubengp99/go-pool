@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write  # needed for tagging and releasing
+  contents: write  # required for creating releases
+  actions: read
 
 jobs:
   test:

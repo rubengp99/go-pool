@@ -12,11 +12,12 @@ import (
 
 // Pool is an wrapper for errgroup.Group
 type Pool struct {
-	group  *errgroup.Group
-	ctx    context.Context
-	retry  *retryConfig
-	errors []error
-	mutex  *sync.Mutex
+	group   *errgroup.Group
+	ctx     context.Context
+	retry   *retryConfig
+	errors  []error
+	mutex   *sync.Mutex
+	workers Workers
 }
 
 type retryConfig struct {
@@ -25,7 +26,8 @@ type retryConfig struct {
 }
 
 // Go runs the provided async Tasks, handling them generically
-func (p *Pool) Go(Tasks Workers) error {
+func (p *Pool) Go(Tasks Workers) *Pool {
+	p.workers = Tasks
 	for _, t := range Tasks {
 		p.group.Go(func() error {
 			var err error
@@ -45,8 +47,13 @@ func (p *Pool) Go(Tasks Workers) error {
 		})
 	}
 
+	return p
+}
+
+// Wait waits until all workers are done, and then gracefully shuts down them
+func (p *Pool) Wait() error {
 	err := p.group.Wait()
-	for _, w := range Tasks {
+	for _, w := range p.workers {
 		// shut down Tasks automatically to prevent memory leaks and channel deadlocks
 		w.ShutDown()
 	}

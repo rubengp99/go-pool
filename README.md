@@ -62,16 +62,16 @@ go get github.com/rubengp99/go-pool
 ### Basic Task
 
 ```go
-output := pool.NewDrainer[User]()
-task := pool.NewTask(func(t pool.Args[User]) error {
+output := gopool.NewDrainer[User]()
+task := gopool.NewTask(func(t gopool.Args[User]) error {
     t.Drainer.Send(User{Name: "Alice"})
     return nil
 }).DrainTo(output)
 
-pool := pool.NewPool()
-defer pool.Close()
+pool := gopool.NewPool()
+defer gopool.Close()
 
-pool.Go(task).Wait()
+gopool.Go(task).Wait()
 results := output.Drain()
 fmt.Println(results[0].Name) // Alice
 ```
@@ -80,7 +80,7 @@ fmt.Println(results[0].Name) // Alice
 
 ```go
 var numRetries int
-task := pool.NewTask(func(t pool.Args[any]) error {
+task := gopool.NewTask(func(t gopool.Args[any]) error {
     numRetries++
     if numRetries < 3 {
         return fmt.Errorf("transient error")
@@ -88,30 +88,30 @@ task := pool.NewTask(func(t pool.Args[any]) error {
     return nil
 }).WithRetry(3, 200*time.Millisecond)
 
-pool := pool.NewPool()
-pool.Go(task).Wait()
+pool := gopool.NewPool()
+gopool.Go(task).Wait()
 ```
 
 ### Multiple Task Types
 
 ```go
-outA := pool.NewDrainer[A]()
-outB := pool.NewDrainer[B]()
+outA := gopool.NewDrainer[A]()
+outB := gopool.NewDrainer[B]()
 
 // Task A
-t1 := pool.NewTask(func(t pool.Args[A]) error {
+t1 := gopool.NewTask(func(t gopool.Args[A]) error {
     t.Drainer.Send(A{Value: "Hello"})
     return nil
 }).DrainTo(outA)
 
 // Task B
-t2 := pool.NewTask(func(t pool.Args[B]) error {
+t2 := gopool.NewTask(func(t gopool.Args[B]) error {
     t.Drainer.Send(B{Value: 42.5})
     return nil
 }).DrainTo(outB)
 
-pool := pool.NewPool()
-pool.Go(t1, t2).Wait()
+pool := gopool.NewPool()
+gopool.Go(t1, t2).Wait()
 
 fmt.Println(outA.Drain())
 fmt.Println(outB.Drain())
@@ -196,26 +196,26 @@ it provides type safety, retries, automatic draining, and deterministic cleanup 
 
 ### General
 
-- Graceful Shutdown — always call `pool.Close()` or defer it for safe cleanup.
+- Graceful Shutdown — always call `gopool.Close()` or defer it for safe cleanup.
 - Thread Safety — never access internal slices or channels directly.
 - Non-blocking design — use `Drain()` or wait for pool completion instead of manual `close()` calls.
 
 ### Drainer (Drain)
 
-- Create via `pool.NewDrainer[T]()`
+- Create via `gopool.NewDrainer[T]()`
 - Use `Send()` to safely push results
 - Collect values using `Drain()`
 - Internally guarded by `sync.Mutex` and `sync.Cond`
 
 ### Task and Worker Management
 
-- Wrap async functions with `pool.NewTask()`
+- Wrap async functions with `gopool.NewTask()`
 - Chain configuration fluently using `.WithRetry()` and `.DrainTo()`
 - Provide inputs using `.WithInput()`
 
 ### Pool
 
-- Use `pool.NewPool()` for controlled concurrency
+- Use `gopool.NewPool()` for controlled concurrency
 - Limit parallelism with `.WithLimit(limit)`
 - Apply retry policy globally with `.WithRetry(attempts, sleep)`
 - Wait for all tasks to complete using `.Wait()`

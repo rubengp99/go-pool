@@ -174,10 +174,10 @@ it provides type safety, retries, automatic draining, and deterministic cleanup 
 
 ### 🧩 Benchmark Insights
 
-- AsyncPackage and AsyncPackageWithDrainer show consistent sub-microsecond operation times.
+- `AsyncPackage` and `AsyncPackageWithDrainer` show consistent sub-microsecond operation times.
 - Memory allocations remain extremely low — under 250 B/op even with drainer support.
-- The performance delta vs errgroup reflects controlled synchronization overhead (mutex + condition variable).
-- In practice, go-async scales linearly with worker count and maintains predictable latency under load.
+- The performance delta vs `errgroup` reflects controlled synchronization overhead (mutex + condition variable).
+- In practice, `go-async` scales linearly with worker count and maintains predictable latency under load.
 
 ---
 
@@ -196,29 +196,29 @@ it provides type safety, retries, automatic draining, and deterministic cleanup 
 
 ### General
 
-- Graceful Shutdown — always call pool.Close() or defer it for safe cleanup.
+- Graceful Shutdown — always call `pool.Close()` or defer it for safe cleanup.
 - Thread Safety — never access internal slices or channels directly.
-- Non-blocking design — use Drain() or wait for pool completion instead of manual close() calls.
+- Non-blocking design — use `Drain()` or wait for pool completion instead of manual `close()` calls.
 
 ### Drainer (Drain)
 
-- Create via async.NewDrainer[T]()
-- Use Send() to safely push results
-- Collect values using Drain()
-- Internally guarded by sync.Mutex and sync.Cond
+- Create via `async.NewDrainer[T]()`
+- Use `Send()` to safely push results
+- Collect values using `Drain()`
+- Internally guarded by `sync.Mutex` and `sync.Cond`
 
 ### Task and Worker Management
 
-- Wrap async functions with async.NewTask()
-- Chain configuration fluently using .WithRetry() and .DrainTo()
-- Provide inputs using .WithInput()
+- Wrap async functions with `async.NewTask()`
+- Chain configuration fluently using `.WithRetry()` and `.DrainTo()`
+- Provide inputs using `.WithInput()`
 
 ### Pool
 
-- Use async.NewPool() for controlled concurrency
-- Limit parallelism with .WithLimit(limit)
-- Apply retry policy globally with .WithRetry(attempts, sleep)
-- Wait for all tasks to complete using .Wait()
+- Use `async.NewPool()` for controlled concurrency
+- Limit parallelism with `.WithLimit(limit)`
+- Apply retry policy globally with `.WithRetry(attempts, sleep)`
+- Wait for all tasks to complete using `.Wait()`
 
 ### Testing
 

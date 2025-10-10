@@ -157,15 +157,17 @@ type Retryable interface { WithRetry(attempts uint, sleep time.Duration) Worker 
 goos: linux, goarch: amd64, cpu: 13th Gen Intel i9-13900KS
 ```
 
-| Name                                         | Time per op (ns) | Allocs per op | Bytes per op |
-|----------------------------------------------|----------------|---------------|--------------|
-| ErrGroup-32                                  | 178.7          | 1             | 24 B         |
-| ChannelsWithOutputAndErrChannel-32           | 259.9          | 2             | 72 B         |
-| ChannelsWithWaitGroup-32                     | 272.8          | 2             | 80 B         |
-| MutexWithErrGroup-32                         | 270.9          | 2             | 102 B        |
-| GoPoolWithDrainer-32                         | 277.5          | 4             | 162 B        |
-| ChannelsWithErrGroup-32                      | 279.5          | 2             | 80 B         |
-| GoPool-32                                    | 297.4          | 3             | 96 B         |
+| Name                                  | Time per op (ns) | Bytes per op | Allocs per op |
+|--------------------------------------|------------------|---------------|----------------|
+| ErrGroup                             | 180.9            | 24 B          | 1              |
+| ChannelsWithOutputAndErrChannel      | 263.2            | 72 B          | 2              |
+| GoPool (Our Package)                 | 265.2            | 96 B          | 3              |
+| GoPoolWithDrainer (Our Package)      | 270.9            | 159 B         | 4              |
+| ChannelsWithWaitGroup                | 273.7            | 80 B          | 2              |
+| ChannelsWithErrGroup                 | 279.9            | 80 B          | 2              |
+| MutexWithErrGroup                    | 309.0            | 107 B         | 2              |
+
+
 
 ![Benchmark Comparison](go_async_benchmarks.png)
 

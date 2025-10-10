@@ -158,15 +158,15 @@ goos: linux, goarch: amd64, cpu: 13th Gen Intel i9-13900KS
 
 | Name                                      | Iterations | ns/op    | B/op   | allocs/op |
 |-------------------------------------------|-----------:|---------:|-------:|-----------:|
-| **ErrGroup**                               | 6,253,089  | **177.8** | **24** | **1**     |
-| GoPool                              | 4,754,223  | **255.9** | 80     | 2          |
-| ChannelsWithOutputAndErrChannel           | 4,463,799  | 258.3    | **72** | 2          |
-| GoPoolWithDrainer                    | 4,570,286  | 262.8    | 118    | 3          |
-| ChannelsWithWaitGroup                      | 4,499,217  | 270.5    | 80     | 2          |
-| ChannelsWithErrGroup                       | 4,336,857  | 277.6    | 80     | 2          |
-| MutexWithErrGroup                          | 4,380,441  | 368.9    | 127    | 2          |
+| **ErrGroup**                               | 6,211,902  | **180.3** | **24** | **1**     |
+| **GoPool**                                 | 5,020,380  | **214.4** | 80     | 2          |
+| ChannelsWithOutputAndErrChannel           | 4,426,651  | 260.6    | **72** | 2          |
+| AsyncPackageWithDrainer                    | 4,531,092  | 274.5    | 119    | 3          |
+| ChannelsWithWaitGroup                      | 4,480,616  | 271.5    | 80     | 2          |
+| ChannelsWithErrGroup                       | 4,336,473  | 279.1    | 80     | 2          |
+| MutexWithErrGroup                          | 2,842,214  | 420.6    | 135    | 2          |
 
-![Benchmark Comparison](go_async_benchmarks.png)
+![Benchmark Comparison](benchmark_chart.png)
 
 Even though `go-pool` adds a small constant overhead compared to `errgroup` (≈100–130 ns per operation),
 it provides type safety, retries, automatic draining, and deterministic cleanup — all while staying within ~1.7× of native concurrency performance.

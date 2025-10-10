@@ -1,7 +1,6 @@
 package gopool_test
 
 import (
-	"os"
 	"sync"
 	"testing"
 
@@ -21,8 +20,6 @@ func SimulatedTask() error {
 
 // BenchmarkAsyncPackage benchmarks the `go-async` package.
 func BenchmarkAsyncPackage(b *testing.B) {
-	//disable internal limit on test
-	os.Setenv("STAGE", "prod")
 	// Create a Drain channel for async operations
 	d := gopool.NewPool()
 
@@ -37,13 +34,11 @@ func BenchmarkAsyncPackage(b *testing.B) {
 			b.Fatal(err)
 		}
 	})
-	os.Setenv("STAGE", "test")
 }
 
 // BenchmarkAsyncPackageWithDrainer benchmarks the `go-async` package + drain logic.
 func BenchmarkAsyncPackageWithDrainer(b *testing.B) {
 	//disable internal limit on test
-	os.Setenv("STAGE", "prod")
 	d := gopool.NewPool()
 
 	b.Run("GoPool", func(b *testing.B) {
@@ -61,7 +56,6 @@ func BenchmarkAsyncPackageWithDrainer(b *testing.B) {
 			b.Fatal(err)
 		}
 	})
-	os.Setenv("STAGE", "test")
 }
 
 // BenchmarkErrGroup benchmarks the `errgroup.Group`.

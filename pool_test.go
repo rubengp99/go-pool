@@ -2,17 +2,12 @@ package gopool_test
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	gopool "github.com/rubengp99/go-pool"
 	"github.com/stretchr/testify/assert"
 )
-
-func init() {
-	os.Setenv("STAGE", "test")
-}
 
 type typeA struct {
 	value string
@@ -36,7 +31,7 @@ func TestConcurrentClient(t *testing.T) {
 		gopool.NewTask(tFunc),
 	}
 
-	pool := gopool.NewPool()
+	pool := gopool.NewPool().WithLimit(1)
 	err := pool.Go(requests...).Wait()
 
 	t.Run("No errors", func(t *testing.T) {
@@ -65,7 +60,7 @@ func TestConcurrentClientWithError(t *testing.T) {
 		gopool.NewTask(tFunc),
 	}
 
-	pool := gopool.NewPool()
+	pool := gopool.NewPool().WithLimit(1)
 	err := pool.Go(requests...).Wait()
 
 	t.Run("errors", func(t *testing.T) {
@@ -103,7 +98,7 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 		}).WithRetry(3, 100*time.Millisecond),
 	}
 
-	pool := gopool.NewPool()
+	pool := gopool.NewPool().WithLimit(1)
 	err := pool.Go(requests...).Wait()
 
 	t.Run("6 requests done", func(t *testing.T) {
@@ -140,7 +135,7 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 		}).WithRetry(3, 100*time.Millisecond),
 	}
 
-	pool := gopool.NewPool()
+	pool := gopool.NewPool().WithLimit(1)
 
 	err := pool.Go(requests...).Wait()
 	t.Run("6 requests done", func(t *testing.T) {
@@ -168,7 +163,7 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 		gopool.NewTask(func(t gopool.Args[any]) error {
 			numInvocations++
 
-			if numInvocations > 1 {
+			if numInvocations > 2 {
 				return nil
 			}
 
@@ -176,7 +171,7 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 		}),
 	}
 
-	pool := gopool.NewPool()
+	pool := gopool.NewPool().WithLimit(1)
 	pool.WithRetry(3, 100*time.Millisecond)
 
 	err := pool.Go(requests...).Wait()
@@ -205,7 +200,7 @@ func TestConcurrentClientWithTaskChannel(t *testing.T) {
 		gopool.NewTask(tFunc).DrainTo(output),
 	}
 
-	pool := gopool.NewPool()
+	pool := gopool.NewPool().WithLimit(1)
 
 	// Run the Task(s)
 	err := pool.Go(requests...).Wait()
@@ -250,7 +245,7 @@ func TestConcurrentClientWith2WorkersameChannel(t *testing.T) {
 		gopool.NewTask(tFunc2).DrainTo(output),
 	}
 
-	pool := gopool.NewPool()
+	pool := gopool.NewPool().WithLimit(1)
 
 	// Run the Task(s)
 	err := pool.Go(requests...).Wait()
@@ -268,8 +263,8 @@ func TestConcurrentClientWith2WorkersameChannel(t *testing.T) {
 
 	t.Run("results drained", func(t *testing.T) {
 		if assert.Equal(t, 2, len(results)) {
-			assert.Equal(t, "hello-world!", results[1].value)
-			assert.Equal(t, "hello-world!2", results[0].value)
+			assert.Equal(t, "hello-world!", results[0].value)
+			assert.Equal(t, "hello-world!2", results[1].value)
 		}
 	})
 }
@@ -297,7 +292,7 @@ func TestConcurrentClientWith2TaskDiffTypes(t *testing.T) {
 		gopool.NewTask(tFunc2).DrainTo(output2),
 	}
 
-	pool := gopool.NewPool()
+	pool := gopool.NewPool().WithLimit(1)
 
 	// Run the Task(s)
 	err := pool.Go(requests...).Wait()
@@ -346,7 +341,7 @@ func TestConcurrentClientWith2TaskDiffTypes1Output(t *testing.T) {
 		gopool.NewTask(tFunc2),
 	}
 
-	pool := gopool.NewPool()
+	pool := gopool.NewPool().WithLimit(1)
 
 	// Run the Task(s)
 	err := pool.Go(requests...).Wait()
@@ -395,7 +390,7 @@ func TestConcurrentClientWith2TaskDiffTypes1Output1Input(t *testing.T) {
 		gopool.NewTask(tFunc2).WithInput(&initial),
 	}
 
-	pool := gopool.NewPool()
+	pool := gopool.NewPool().WithLimit(1)
 
 	// Run the Task(s)
 	err := pool.Go(requests...).Wait()

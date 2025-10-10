@@ -25,9 +25,8 @@ func BenchmarkAsyncPackage(b *testing.B) {
 	os.Setenv("STAGE", "prod")
 	// Create a Drain channel for async operations
 	d := gopool.NewPool()
-	defer d.Close()
 
-	b.Run("AsyncPackage", func(b *testing.B) {
+	b.Run("GoPool", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			d.Go(gopool.NewTask(func(arg gopool.Args[int]) error {
 				return SimulatedTask()
@@ -46,9 +45,8 @@ func BenchmarkAsyncPackageWithDrainer(b *testing.B) {
 	//disable internal limit on test
 	os.Setenv("STAGE", "prod")
 	d := gopool.NewPool()
-	defer d.Close()
 
-	b.Run("AsyncPackage", func(b *testing.B) {
+	b.Run("GoPool", func(b *testing.B) {
 		o := gopool.NewDrainer[int]()
 		// Create a Drain channel for async operations
 		for i := 0; i < b.N; i++ {

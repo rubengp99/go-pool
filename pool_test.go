@@ -38,7 +38,6 @@ func TestConcurrentClient(t *testing.T) {
 
 	pool := gopool.NewPool()
 	err := pool.Go(requests...).Wait()
-	defer pool.Close()
 
 	t.Run("No errors", func(t *testing.T) {
 		assert.NoError(t, err)
@@ -106,7 +105,7 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 
 	pool := gopool.NewPool()
 	err := pool.Go(requests...).Wait()
-	defer pool.Close()
+
 	t.Run("6 requests done", func(t *testing.T) {
 		assert.Equal(t, 6, numInvocations)
 	})
@@ -142,7 +141,7 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 	}
 
 	pool := gopool.NewPool()
-	defer pool.Close()
+
 	err := pool.Go(requests...).Wait()
 	t.Run("6 requests done", func(t *testing.T) {
 		assert.Equal(t, 6, numInvocations)
@@ -177,8 +176,9 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 		}),
 	}
 
-	pool := gopool.NewPool().WithRetry(3, 100*time.Millisecond)
-	defer pool.Close()
+	pool := gopool.NewPool()
+	pool.WithRetry(3, 100*time.Millisecond)
+
 	err := pool.Go(requests...).Wait()
 	t.Run("5 requests done", func(t *testing.T) {
 		assert.Equal(t, 5, numInvocations)
@@ -206,7 +206,7 @@ func TestConcurrentClientWithTaskChannel(t *testing.T) {
 	}
 
 	pool := gopool.NewPool()
-	defer pool.Close()
+
 	// Run the Task(s)
 	err := pool.Go(requests...).Wait()
 
@@ -251,7 +251,7 @@ func TestConcurrentClientWith2WorkersameChannel(t *testing.T) {
 	}
 
 	pool := gopool.NewPool()
-	defer pool.Close()
+
 	// Run the Task(s)
 	err := pool.Go(requests...).Wait()
 
@@ -298,7 +298,7 @@ func TestConcurrentClientWith2TaskDiffTypes(t *testing.T) {
 	}
 
 	pool := gopool.NewPool()
-	defer pool.Close()
+
 	// Run the Task(s)
 	err := pool.Go(requests...).Wait()
 
@@ -347,7 +347,7 @@ func TestConcurrentClientWith2TaskDiffTypes1Output(t *testing.T) {
 	}
 
 	pool := gopool.NewPool()
-	defer pool.Close()
+
 	// Run the Task(s)
 	err := pool.Go(requests...).Wait()
 
@@ -382,7 +382,7 @@ func TestConcurrentClientWith2TaskDiffTypes1Output1Input(t *testing.T) {
 		return nil
 	}
 
-	tFunc2 := func(t gopool.Args[typeB]) error {
+	tFunc2 := func(t gopool.Args[*typeB]) error {
 		numInvocations++
 
 		// update
@@ -396,7 +396,7 @@ func TestConcurrentClientWith2TaskDiffTypes1Output1Input(t *testing.T) {
 	}
 
 	pool := gopool.NewPool()
-	defer pool.Close()
+
 	// Run the Task(s)
 	err := pool.Go(requests...).Wait()
 

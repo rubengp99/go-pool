@@ -69,7 +69,6 @@ task := gopool.NewTask(func(t gopool.Args[User]) error {
 }).DrainTo(output)
 
 pool := gopool.NewPool()
-defer gopool.Close()
 
 gopool.Go(task).Wait()
 results := output.Drain()
@@ -157,15 +156,15 @@ type Retryable interface { WithRetry(attempts uint, sleep time.Duration) Worker 
 goos: linux, goarch: amd64, cpu: 13th Gen Intel i9-13900KS
 ```
 
-| Name                                         | Time per op (ns) | Allocs per op | Bytes per op |
-|----------------------------------------------|----------------|---------------|--------------|
-| ErrGroup-32                                  | 178.7          | 1             | 24 B         |
-| ChannelsWithOutputAndErrChannel-32           | 259.9          | 2             | 72 B         |
-| ChannelsWithWaitGroup-32                     | 272.8          | 2             | 80 B         |
-| MutexWithErrGroup-32                         | 270.9          | 2             | 102 B        |
-| GoPoolWithDrainer-32                         | 277.5          | 4             | 162 B        |
-| ChannelsWithErrGroup-32                      | 279.5          | 2             | 80 B         |
-| GoPool-32                                    | 297.4          | 3             | 96 B         |
+| Name                                      | Iterations | ns/op    | B/op   | allocs/op |
+|-------------------------------------------|-----------:|---------:|-------:|-----------:|
+| **ErrGroup**                               | 6,253,089  | **177.8** | **24** | **1**     |
+| GoPool                              | 4,754,223  | **255.9** | 80     | 2          |
+| ChannelsWithOutputAndErrChannel           | 4,463,799  | 258.3    | **72** | 2          |
+| GoPoolWithDrainer                    | 4,570,286  | 262.8    | 118    | 3          |
+| ChannelsWithWaitGroup                      | 4,499,217  | 270.5    | 80     | 2          |
+| ChannelsWithErrGroup                       | 4,336,857  | 277.6    | 80     | 2          |
+| MutexWithErrGroup                          | 4,380,441  | 368.9    | 127    | 2          |
 
 ![Benchmark Comparison](go_async_benchmarks.png)
 
@@ -196,7 +195,6 @@ it provides type safety, retries, automatic draining, and deterministic cleanup 
 
 ### General
 
-- Graceful Shutdown — always call `gopool.Close()` or defer it for safe cleanup.
 - Thread Safety — never access internal slices or channels directly.
 - Non-blocking design — use `Drain()` or wait for pool completion instead of manual `close()` calls.
 

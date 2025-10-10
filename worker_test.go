@@ -77,7 +77,7 @@ func TestWorkerWithInput(t *testing.T) {
 		value: "initial",
 	}
 
-	worker := gopool.NewTask(func(t gopool.Args[typeA]) error {
+	worker := gopool.NewTask(func(t gopool.Args[*typeA]) error {
 		numInvocations++
 		t.Input.value = "updated!"
 		return nil

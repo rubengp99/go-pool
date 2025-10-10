@@ -1,74 +1,74 @@
-# go-async 🌀
+# go-pool 🌀
 
-[![CI Status](https://github.com/rubengp99/go-async/actions/workflows/ci.yml/badge.svg)](https://github.com/rubengp99/go-async/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/github/v/release/rubengp99/go-async)](https://github.com/rubengp99/go-async/releases)
+[![CI Status](https://github.com/rubengp99/go-pool/actions/workflows/ci.yml/badge.svg)](https://github.com/rubengp99/go-pool/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/release/rubengp99/go-pool)](https://github.com/rubengp99/go-pool/releases)
 ![Coverage](https://img.shields.io/badge/Coverage-86.6%25-brightgreen)
-[![Go Report Card](https://goreportcard.com/badge/github.com/rubengp99/go-async)](https://goreportcard.com/report/github.com/rubengp99/go-async)
-[![GoDoc](https://pkg.go.dev/badge/github.com/rubengp99/go-async)](https://pkg.go.dev/github.com/rubengp99/go-async)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/rubengp99/go-async/blob/dev/LICENSE.md)
+[![Go Report Card](https://goreportcard.com/badge/github.com/rubengp99/go-pool)](https://goreportcard.com/report/github.com/rubengp99/go-pool)
+[![GoDoc](https://pkg.go.dev/badge/github.com/rubengp99/go-pool)](https://pkg.go.dev/github.com/rubengp99/go-pool)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/rubengp99/go-pool/blob/dev/LICENSE.md)
 
-> A lightweight, type-safe, and retryable asynchronous worker pool for Go — built on **`sync.WaitGroup`**, **semaphores**, **context**, and **condition variables**, _not_ `errgroup`.
+> A lightweight, type-safe, and retryable concurrent worker pool for Go — built on **`sync.WaitGroup`**, **semaphores**, **context**, and **condition variables**, _not_ `errgroup`.
 
-`go-async` provides deterministic, leak-free concurrency with automatic retries, result draining, and type-safe tasks, suitable for high-throughput Go applications.
-
----
-
-## ✨ Features
-
-- ✅ Type-safe generic workers (`Task[T]`)
-- 🧩 Graceful error propagation
-- 🔁 Built-in retry with exponential backoff + jitter
-- ⚡ Asynchronous result draining (`Drain`)
-- 🧵 Deterministic shutdown (no goroutine leaks)
-- 🔒 Mutex + condition variable–protected data aggregation
-- 🧰 Fluent functional composition (`WithRetry`, `DrainTo`, `WithInput`)
-- 🧠 Implemented with `sync.WaitGroup`, semaphores, `context`, and `sync.Cond`
+`go-pool` provides deterministic, leak-free concurrency with automatic retries, result draining, and type-safe tasks, suitable for high-throughput Go applications.
 
 ---
 
-## 📦 Installation
+## Features
+
+- Type-safe generic workers (`Task[T]`)
+- Graceful error propagation
+- Built-in retry with exponential backoff + jitter
+- Concurrent result draining (`Drain`)
+- Deterministic shutdown (no goroutine leaks)
+- Mutex + condition variable–protected data aggregation
+- Fluent functional composition (`WithRetry`, `DrainTo`, `WithInput`)
+- Implemented with `sync.WaitGroup`, semaphores, `context`, and `sync.Cond`
+
+---
+
+## Installation
 
 ```bash
-go get github.com/rubengp99/go-async
+go get github.com/rubengp99/go-pool
 ```
 
 ---
 
-## 🧠 Concept Overview
+## Concept Overview
 
 | Type | Description |
 |------|-------------|
 | `Task[T]` | Represents a unit of async work |
 | `Pool` | Manages concurrent execution using WaitGroup and semaphores |
-| `Drain[T]` | Collects results asynchronously using mutex + condition variable |
+| `Drain[T]` | Collects results concurrently using mutex + condition variable |
 | `Args[T]` | Provides task input and drainer reference |
 | `Worker` | Interface for executable and retryable tasks |
 
 ---
 
-## ⚙️ How It Works
+## How It Works
 
 `Pool` orchestrates multiple `Worker`s concurrently:
 1. Each worker runs in a separate goroutine managed by a `WaitGroup`.
 2. Concurrency is controlled with a semaphore.
 3. Shared `context` handles cancellation.
-4. `Drain[T]` asynchronously collects results.
+4. `Drain[T]` concurrently collects results.
 5. On completion, resources and channels close automatically.
 
 ---
 
-## 🧩 Example Usage
+## Example Usage
 
 ### Basic Task
 
 ```go
-output := async.NewDrainer[User]()
-task := async.NewTask(func(t async.Args[User]) error {
+output := pool.NewDrainer[User]()
+task := pool.NewTask(func(t pool.Args[User]) error {
     t.Drainer.Send(User{Name: "Alice"})
     return nil
 }).DrainTo(output)
 
-pool := async.NewPool()
+pool := pool.NewPool()
 defer pool.Close()
 
 pool.Go(task).Wait()
@@ -80,7 +80,7 @@ fmt.Println(results[0].Name) // Alice
 
 ```go
 var numRetries int
-task := async.NewTask(func(t async.Args[any]) error {
+task := pool.NewTask(func(t pool.Args[any]) error {
     numRetries++
     if numRetries < 3 {
         return fmt.Errorf("transient error")
@@ -88,29 +88,29 @@ task := async.NewTask(func(t async.Args[any]) error {
     return nil
 }).WithRetry(3, 200*time.Millisecond)
 
-pool := async.NewPool()
+pool := pool.NewPool()
 pool.Go(task).Wait()
 ```
 
 ### Multiple Task Types
 
 ```go
-outA := async.NewDrainer[A]()
-outB := async.NewDrainer[B]()
+outA := pool.NewDrainer[A]()
+outB := pool.NewDrainer[B]()
 
 // Task A
-t1 := async.NewTask(func(t async.Args[A]) error {
+t1 := pool.NewTask(func(t pool.Args[A]) error {
     t.Drainer.Send(A{Value: "Hello"})
     return nil
 }).DrainTo(outA)
 
 // Task B
-t2 := async.NewTask(func(t async.Args[B]) error {
+t2 := pool.NewTask(func(t pool.Args[B]) error {
     t.Drainer.Send(B{Value: 42.5})
     return nil
 }).DrainTo(outB)
 
-pool := async.NewPool()
+pool := pool.NewPool()
 pool.Go(t1, t2).Wait()
 
 fmt.Println(outA.Drain())
@@ -119,7 +119,7 @@ fmt.Println(outB.Drain())
 
 ---
 
-## 🧰 Interfaces
+## Interfaces
 
 ```go
 type Worker interface { Executable; Retryable }
@@ -129,7 +129,7 @@ type Retryable interface { WithRetry(attempts uint, sleep time.Duration) Worker 
 
 ---
 
-## 🧱 Structs and Functions
+## Structs and Functions
 
 ### Task[T]
 - `Execute()` - run the task
@@ -151,7 +151,7 @@ type Retryable interface { WithRetry(attempts uint, sleep time.Duration) Worker 
 
 ---
 
-## 🧪 Benchmarks
+## Benchmarks
 
 ```
 goos: linux, goarch: amd64, cpu: 13th Gen Intel i9-13900KS
@@ -163,25 +163,25 @@ goos: linux, goarch: amd64, cpu: 13th Gen Intel i9-13900KS
 | ChannelsWithOutputAndErrChannel-32           | 259.9          | 2             | 72 B         |
 | ChannelsWithWaitGroup-32                     | 272.8          | 2             | 80 B         |
 | MutexWithErrGroup-32                         | 270.9          | 2             | 102 B        |
-| AsyncPackageWithDrainer-32                   | 277.5          | 4             | 162 B        |
+| GoPoolWithDrainer-32                         | 277.5          | 4             | 162 B        |
 | ChannelsWithErrGroup-32                      | 279.5          | 2             | 80 B         |
-| AsyncPackage-32                              | 297.4          | 3             | 96 B         |
+| GoPool-32                                    | 297.4          | 3             | 96 B         |
 
 ![Benchmark Comparison](go_async_benchmarks.png)
 
-Even though `go-async` adds a small constant overhead compared to `errgroup` (≈100–130 ns per operation),
+Even though `go-pool` adds a small constant overhead compared to `errgroup` (≈100–130 ns per operation),
 it provides type safety, retries, automatic draining, and deterministic cleanup — all while staying within ~1.7× of native concurrency performance.
 
-### 🧩 Benchmark Insights
+### Benchmark Insights
 
-- `AsyncPackage` and `AsyncPackageWithDrainer` show consistent sub-microsecond operation times.
+- `GoPool` and `GoPoolWithDrainer` show consistent sub-microsecond operation times.
 - Memory allocations remain extremely low — under 250 B/op even with drainer support.
 - The performance delta vs `errgroup` reflects controlled synchronization overhead (mutex + condition variable).
-- In practice, `go-async` scales linearly with worker count and maintains predictable latency under load.
+- In practice, `go-pool` scales linearly with worker count and maintains predictable latency under load.
 
 ---
 
-## ⚡ Design Highlights
+## Design Highlights
 
 - Structured concurrency with `sync.WaitGroup`
 - Controlled parallelism via semaphores
@@ -202,20 +202,20 @@ it provides type safety, retries, automatic draining, and deterministic cleanup 
 
 ### Drainer (Drain)
 
-- Create via `async.NewDrainer[T]()`
+- Create via `pool.NewDrainer[T]()`
 - Use `Send()` to safely push results
 - Collect values using `Drain()`
 - Internally guarded by `sync.Mutex` and `sync.Cond`
 
 ### Task and Worker Management
 
-- Wrap async functions with `async.NewTask()`
+- Wrap async functions with `pool.NewTask()`
 - Chain configuration fluently using `.WithRetry()` and `.DrainTo()`
 - Provide inputs using `.WithInput()`
 
 ### Pool
 
-- Use `async.NewPool()` for controlled concurrency
+- Use `pool.NewPool()` for controlled concurrency
 - Limit parallelism with `.WithLimit(limit)`
 - Apply retry policy globally with `.WithRetry(attempts, sleep)`
 - Wait for all tasks to complete using `.Wait()`
@@ -232,9 +232,9 @@ go test -bench . -benchmem -memprofile=mem.prof
 ```
 ---
 
-## 💬 Summary
+## Summary
 
-`go-async` provides a modern, type-safe, and retryable abstraction over Go’s native synchronization primitives — combining simplicity, determinism, and high throughput.
+`go-pool` provides a modern, type-safe, and retryable abstraction over Go’s native synchronization primitives — combining simplicity, determinism, and high throughput.
 
 Built for developers who want concurrency that’s:
 
@@ -245,6 +245,6 @@ Built for developers who want concurrency that’s:
 
 ---
 
-## 📜 License
+## License
 
 MIT License © 2025 [rubengp99](https://github.com/rubengp99)

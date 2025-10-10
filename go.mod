@@ -1,4 +1,4 @@
-module github.com/rubengp99/go-async
+module github.com/rubengp99/go-pool
 
 go 1.25.0
 

@@ -1,15 +1,15 @@
-package async_test
+package gopool_test
 
 import (
 	"testing"
 
-	"github.com/rubengp99/go-async"
+	gopool "github.com/rubengp99/go-pool"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestDrainer(t *testing.T) {
 
-	drainer := async.NewDrainer[typeA]()
+	drainer := gopool.NewDrainer[typeA]()
 	drainer.Send(typeA{value: "1"})
 	drainer.Send(typeA{value: "2"})
 	drainer.Send(typeA{value: "3"})

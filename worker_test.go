@@ -1,18 +1,18 @@
-package async_test
+package gopool_test
 
 import (
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/rubengp99/go-async"
+	gopool "github.com/rubengp99/go-pool"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestWorker(t *testing.T) {
 	numInvocations := 0
 
-	worker := async.NewTask(func(t async.Args[any]) error {
+	worker := gopool.NewTask(func(t gopool.Args[any]) error {
 		numInvocations++
 		return nil
 	})
@@ -31,7 +31,7 @@ func TestWorker(t *testing.T) {
 func TestWorkerWithRetrySucceed(t *testing.T) {
 	numInvocations := 0
 
-	worker := async.NewTask(func(t async.Args[any]) error {
+	worker := gopool.NewTask(func(t gopool.Args[any]) error {
 		numInvocations++
 		if numInvocations < 3 {
 			return fmt.Errorf("error")
@@ -54,7 +54,7 @@ func TestWorkerWithRetrySucceed(t *testing.T) {
 func TestWorkerWithRetry(t *testing.T) {
 	numInvocations := 0
 
-	worker := async.NewTask(func(t async.Args[any]) error {
+	worker := gopool.NewTask(func(t gopool.Args[any]) error {
 		numInvocations++
 		return fmt.Errorf("error")
 	}).WithRetry(3, 100*time.Millisecond)
@@ -77,7 +77,7 @@ func TestWorkerWithInput(t *testing.T) {
 		value: "initial",
 	}
 
-	worker := async.NewTask(func(t async.Args[typeA]) error {
+	worker := gopool.NewTask(func(t gopool.Args[typeA]) error {
 		numInvocations++
 		t.Input.value = "updated!"
 		return nil
@@ -101,9 +101,9 @@ func TestWorkerWithInput(t *testing.T) {
 func TestWorkerWithOutput(t *testing.T) {
 	numInvocations := 0
 
-	output := async.NewDrainer[typeA]()
+	output := gopool.NewDrainer[typeA]()
 
-	worker := async.NewTask(func(t async.Args[typeA]) error {
+	worker := gopool.NewTask(func(t gopool.Args[typeA]) error {
 		numInvocations++
 		t.Drainer.Send(typeA{
 			value: "initial",

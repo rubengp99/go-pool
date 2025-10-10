@@ -1,11 +1,11 @@
-package async_test
+package gopool_test
 
 import (
 	"os"
 	"sync"
 	"testing"
 
-	"github.com/rubengp99/go-async"
+	gopool "github.com/rubengp99/go-pool"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -24,12 +24,12 @@ func BenchmarkAsyncPackage(b *testing.B) {
 	//disable internal limit on test
 	os.Setenv("STAGE", "prod")
 	// Create a Drain channel for async operations
-	d := async.NewPool()
+	d := gopool.NewPool()
 	defer d.Close()
 
 	b.Run("AsyncPackage", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			d.Go(async.NewTask(func(arg async.Args[int]) error {
+			d.Go(gopool.NewTask(func(arg gopool.Args[int]) error {
 				return SimulatedTask()
 			}))
 		}
@@ -45,14 +45,14 @@ func BenchmarkAsyncPackage(b *testing.B) {
 func BenchmarkAsyncPackageWithDrainer(b *testing.B) {
 	//disable internal limit on test
 	os.Setenv("STAGE", "prod")
-	d := async.NewPool()
+	d := gopool.NewPool()
 	defer d.Close()
 
 	b.Run("AsyncPackage", func(b *testing.B) {
-		o := async.NewDrainer[int]()
+		o := gopool.NewDrainer[int]()
 		// Create a Drain channel for async operations
 		for i := 0; i < b.N; i++ {
-			d.Go(async.NewTask(func(arg async.Args[int]) error {
+			d.Go(gopool.NewTask(func(arg gopool.Args[int]) error {
 				i := i
 				arg.Drainer.Send(i)
 				return SimulatedTask()

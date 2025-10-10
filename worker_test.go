@@ -111,7 +111,7 @@ func TestWorkerWithOutput(t *testing.T) {
 		return nil
 	}).DrainTo(output)
 
-	err := worker.ExecuteAndShutDown()
+	err := worker.Execute()
 	results := output.Drain()
 
 	t.Run("No errors", func(t *testing.T) {

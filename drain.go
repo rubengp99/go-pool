@@ -2,88 +2,41 @@ package async
 
 import (
 	"sync"
-	"time"
 )
 
-// Drainable is an interfacee that wraps a drainable channel/async output functionality
-type Drainable interface {
-	ShutDown()
-}
-
+// Drain collects values dynamically without pre-allocation (unbuffered)
 type Drain[T any] struct {
-	ch     chan T
 	values []T
-	mutex  *sync.Mutex
-	done   chan struct{}
+	mu     sync.Mutex
+	cond   *sync.Cond
 }
 
-// NewDrainer creates a new Drain channel and starts async collection
+// NewDrainer creates an unbuffered, thread-safe Drainer
 func NewDrainer[T any]() *Drain[T] {
-	d := &Drain[T]{
-		ch:    make(chan T),
-		mutex: &sync.Mutex{},
-		done:  make(chan struct{}),
-	}
-
-	go func() {
-		for {
-			select {
-			case v, ok := <-d.ch:
-				if !ok {
-					d.ShutDown()
-					return
-				}
-				d.mutex.Lock()
-				d.values = append(d.values, v)
-				d.mutex.Unlock()
-			default:
-				time.Sleep(1 * time.Millisecond)
-			}
-		}
-	}()
-
+	d := &Drain[T]{}
+	d.cond = sync.NewCond(&d.mu)
 	return d
 }
 
-// Channel returns the underlying channel for sending
-func (d *Drain[T]) Channel() chan<- T {
-	return d.ch
+// Send appends a value safely and notifies Drain()
+func (d *Drain[T]) Send(v T) {
+	d.mu.Lock()
+	d.values = append(d.values, v)
+	d.cond.Broadcast() // wake any goroutines waiting in Drain()
+	d.mu.Unlock()
 }
 
-// Send sends our value to the underlying channel
-func (d *Drain[T]) Send(input T) {
-	d.ch <- input
+// Count returns the number of items pushed so far
+func (d *Drain[T]) Count() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return len(d.values)
 }
 
-// Drain returns all collected values after the channel is closed
+// Drain returns a snapshot of all values currently pushed
+// Since total is unknown, this returns current state immediately
 func (d *Drain[T]) Drain() []T {
-	<-d.done
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	return d.values
-}
-
-// DrainAndShutDown returns all collected values after the channel is closed automatically
-func (d *Drain[T]) DrainAndShutDown() []T {
-	d.ShutDown()
-	return d.Drain()
-}
-
-// ShutDown closes the underlying channel (should be called by pool/Task)
-func (d *Drain[T]) ShutDown() {
-	if d == nil {
-		return
-	}
-
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-
-	select {
-	case <-d.done:
-		// Already closed, do nothing
-	default:
-		// Protect against multiple close calls
-		close(d.ch)
-		close(d.done)
-	}
 }

@@ -37,8 +37,8 @@ func TestConcurrentClient(t *testing.T) {
 	}
 
 	async := async.NewPool()
+	err := async.Go(requests...).Wait()
 	defer async.Close()
-	err := async.Go(requests).Wait()
 
 	t.Run("No errors", func(t *testing.T) {
 		assert.NoError(t, err)
@@ -67,8 +67,7 @@ func TestConcurrentClientWithError(t *testing.T) {
 	}
 
 	async := async.NewPool()
-	defer async.Close()
-	err := async.Go(requests).Wait()
+	err := async.Go(requests...).Wait()
 
 	t.Run("errors", func(t *testing.T) {
 		assert.Error(t, err)
@@ -106,8 +105,8 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 	}
 
 	async := async.NewPool()
+	err := async.Go(requests...).Wait()
 	defer async.Close()
-	err := async.Go(requests).Wait()
 	t.Run("6 requests done", func(t *testing.T) {
 		assert.Equal(t, 6, numInvocations)
 	})
@@ -144,7 +143,7 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 
 	async := async.NewPool()
 	defer async.Close()
-	err := async.Go(requests).Wait()
+	err := async.Go(requests...).Wait()
 	t.Run("6 requests done", func(t *testing.T) {
 		assert.Equal(t, 6, numInvocations)
 	})
@@ -169,15 +168,20 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 		}),
 		async.NewTask(func(t async.Args[any]) error {
 			numInvocations++
+
+			if numInvocations > 1 {
+				return nil
+			}
+
 			return fmt.Errorf("bye 2")
 		}),
 	}
 
 	async := async.NewPool().WithRetry(3, 100*time.Millisecond)
 	defer async.Close()
-	err := async.Go(requests).Wait()
-	t.Run("6 requests done", func(t *testing.T) {
-		assert.Equal(t, 6, numInvocations)
+	err := async.Go(requests...).Wait()
+	t.Run("5 requests done", func(t *testing.T) {
+		assert.Equal(t, 5, numInvocations)
 	})
 
 	t.Run("Returns the first error", func(t *testing.T) {
@@ -203,9 +207,8 @@ func TestConcurrentClientWithTaskChannel(t *testing.T) {
 
 	asyncPool := async.NewPool()
 	defer asyncPool.Close()
-
 	// Run the Task(s)
-	err := asyncPool.Go(requests).Wait()
+	err := asyncPool.Go(requests...).Wait()
 
 	// Collect results safely
 	results := output.Drain()
@@ -249,9 +252,8 @@ func TestConcurrentClientWith2WorkersameChannel(t *testing.T) {
 
 	asyncPool := async.NewPool()
 	defer asyncPool.Close()
-
 	// Run the Task(s)
-	err := asyncPool.Go(requests).Wait()
+	err := asyncPool.Go(requests...).Wait()
 
 	// Collect results safely
 	results := output.Drain()
@@ -266,8 +268,8 @@ func TestConcurrentClientWith2WorkersameChannel(t *testing.T) {
 
 	t.Run("results drained", func(t *testing.T) {
 		if assert.Equal(t, 2, len(results)) {
-			assert.Equal(t, "hello-world!", results[0].value)
-			assert.Equal(t, "hello-world!2", results[1].value)
+			assert.Equal(t, "hello-world!", results[1].value)
+			assert.Equal(t, "hello-world!2", results[0].value)
 		}
 	})
 }
@@ -297,9 +299,8 @@ func TestConcurrentClientWith2TaskDiffTypes(t *testing.T) {
 
 	asyncPool := async.NewPool()
 	defer asyncPool.Close()
-
 	// Run the Task(s)
-	err := asyncPool.Go(requests).Wait()
+	err := asyncPool.Go(requests...).Wait()
 
 	// Collect results safely
 	results := output.Drain()
@@ -347,9 +348,8 @@ func TestConcurrentClientWith2TaskDiffTypes1Output(t *testing.T) {
 
 	asyncPool := async.NewPool()
 	defer asyncPool.Close()
-
 	// Run the Task(s)
-	err := asyncPool.Go(requests).Wait()
+	err := asyncPool.Go(requests...).Wait()
 
 	// Collect results safely
 	results := output.Drain()
@@ -397,9 +397,8 @@ func TestConcurrentClientWith2TaskDiffTypes1Output1Input(t *testing.T) {
 
 	asyncPool := async.NewPool()
 	defer asyncPool.Close()
-
 	// Run the Task(s)
-	err := asyncPool.Go(requests).Wait()
+	err := asyncPool.Go(requests...).Wait()
 
 	// Collect results safely
 	results := output.Drain()

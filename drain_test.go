@@ -14,7 +14,7 @@ func TestDrainer(t *testing.T) {
 	drainer.Send(typeA{value: "2"})
 	drainer.Send(typeA{value: "3"})
 
-	results := drainer.DrainAndShutDown()
+	results := drainer.Drain()
 
 	t.Run("results as expected", func(t *testing.T) {
 		assert.Equal(t, 3, len(results))

@@ -168,7 +168,7 @@ goos: linux, goarch: amd64, cpu: 13th Gen Intel i9-13900KS
 
 ![Benchmark Comparison](benchmark_chart.png)
 
-Even though `go-pool` adds a small constant overhead compared to `errgroup` (≈100–130 ns per operation),
+Even though `go-pool` adds a small constant overhead compared to `errgroup` (≈30–90 ns per operation),
 it provides type safety, retries, automatic draining, and deterministic cleanup — all while staying within ~1.7× of native concurrency performance.
 
 ### Benchmark Insights

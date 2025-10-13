@@ -161,7 +161,7 @@ goos: linux, goarch: amd64, cpu: 13th Gen Intel i9-13900KS
 | **ErrGroup**                               | 6,211,902  | **180.3** | **24** | **1**     |
 | **GoPool**                                 | 5,020,380  | **214.4** | 80     | 2          |
 | ChannelsWithOutputAndErrChannel           | 4,426,651  | 260.6    | **72** | 2          |
-| AsyncPackageWithDrainer                    | 4,531,092  | 274.5    | 119    | 3          |
+| **GoPoolWithDrainer**                    | 4,531,092  | 274.5    | 119    | 3          |
 | ChannelsWithWaitGroup                      | 4,480,616  | 271.5    | 80     | 2          |
 | ChannelsWithErrGroup                       | 4,336,473  | 279.1    | 80     | 2          |
 | MutexWithErrGroup                          | 2,842,214  | 420.6    | 135    | 2          |

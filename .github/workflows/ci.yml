@@ -4,8 +4,8 @@ on:
   push:
     branches: [ "main" ]
     tags:
-      - 'v*.*.*'
-  workflow_dispatch:    # allows manual trigger
+      - 'v*.*.*'  # Trigger on tag pushes
+  workflow_dispatch:
     inputs:
       tag:
         description: 'Optional tag to release (e.g., v2.0.0)'
@@ -90,16 +90,13 @@ jobs:
       - name: Determine Tag
         id: version
         run: |
-          # Use manual tag if provided
           if [ -n "${{ github.event.inputs.tag }}" ]; then
+            # Use manual tag if provided
             new_tag="${{ github.event.inputs.tag }}"
-          else
+          elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
+            # Auto-increment patch version for main branch
             latest_tag=$(git describe --tags --abbrev=0 || echo "v0.0.0")
-            echo "Latest tag: $latest_tag"
-
             IFS='.' read -r major minor patch <<<"${latest_tag#v}"
-
-            # Increment patch
             if [ "$patch" -lt 9 ]; then
               patch=$((patch + 1))
             else
@@ -111,14 +108,14 @@ jobs:
                 major=$((major + 1))
               fi
             fi
-
             new_tag="v${major}.${minor}.${patch}"
+          else
+            # Use pushed tag for tag-triggered workflow
+            new_tag="${GITHUB_REF##*/}"
           fi
 
-          # Ensure tag does not already exist
-          if git rev-parse "$new_tag" >/dev/null 2>&1; then
-            echo "Tag $new_tag already exists, skipping creation."
-          else
+          # Ensure tag exists
+          if ! git rev-parse "$new_tag" >/dev/null 2>&1; then
             git tag "$new_tag"
             git push origin "$new_tag"
           fi

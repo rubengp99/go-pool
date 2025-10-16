@@ -3,6 +3,13 @@ name: Release
 on:
   push:
     branches: [ "main" ]
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:    # allows manual trigger
+    inputs:
+      tag:
+        description: 'Optional tag to release (e.g., v2.0.0)'
+        required: false
 
 permissions:
   contents: write
@@ -71,8 +78,6 @@ jobs:
     name: Create Release
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -82,30 +87,42 @@ jobs:
       - name: Fetch All Tags
         run: git fetch --tags
 
-      - name: Determine Latest Tag and Bump Version
+      - name: Determine Tag
         id: version
         run: |
-          latest_tag=$(git describe --tags --abbrev=0 || echo "v0.0.0")
-          echo "Latest tag: $latest_tag"
-          IFS='.' read -r major minor patch <<<"${latest_tag#v}"
-
-          # Handle rollover logic
-          if [ "$patch" -lt 9 ]; then
-            patch=$((patch + 1))
+          # Use manual tag if provided
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            new_tag="${{ github.event.inputs.tag }}"
           else
-            patch=0
-            if [ "$minor" -lt 9 ]; then
-              minor=$((minor + 1))
+            latest_tag=$(git describe --tags --abbrev=0 || echo "v0.0.0")
+            echo "Latest tag: $latest_tag"
+
+            IFS='.' read -r major minor patch <<<"${latest_tag#v}"
+
+            # Increment patch
+            if [ "$patch" -lt 9 ]; then
+              patch=$((patch + 1))
             else
-              minor=0
-              major=$((major + 1))
+              patch=0
+              if [ "$minor" -lt 9 ]; then
+                minor=$((minor + 1))
+              else
+                minor=0
+                major=$((major + 1))
+              fi
             fi
+
+            new_tag="v${major}.${minor}.${patch}"
           fi
 
-          new_tag="v${major}.${minor}.${patch}"
-          echo "New tag: $new_tag"
-          git tag "$new_tag"
-          git push origin "$new_tag"
+          # Ensure tag does not already exist
+          if git rev-parse "$new_tag" >/dev/null 2>&1; then
+            echo "Tag $new_tag already exists, skipping creation."
+          else
+            git tag "$new_tag"
+            git push origin "$new_tag"
+          fi
+
           echo "tag=$new_tag" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release with Notes

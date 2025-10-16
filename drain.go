@@ -1,48 +1,69 @@
 package gopool
 
 import (
-	"sync"
+	"sync/atomic"
 )
 
-// Drain collects values safely with minimal allocations
-type Drain[T any] struct {
-	mu     sync.Mutex
-	values []T
-	cond   *sync.Cond
+const chunkSize = 2048
+
+type chunk[T any] struct {
+	items [chunkSize]T
+	next  atomic.Pointer[chunk[T]]
+	index atomic.Uint32
 }
 
-// NewDrainer creates a Drain
-func NewDrainer[T any]() *Drain[T] {
-	d := &Drain[T]{values: make([]T, 0, 4)} // small preallocation
-	d.cond = sync.NewCond(&d.mu)
+// Drainer is a lock-free append-only collector
+type Drainer[T any] struct {
+	head *chunk[T]
+	tail atomic.Pointer[chunk[T]]
+}
+
+// NewDrainer creates a new drainer
+func NewDrainer[T any]() *Drainer[T] {
+	c := &chunk[T]{}
+	d := &Drainer[T]{head: c}
+	d.tail.Store(c)
 	return d
 }
 
-// Send appends a value with minimal allocations
-func (d *Drain[T]) Send(v T) {
-	d.mu.Lock()
-	if cap(d.values) == len(d.values) {
-		newCap := cap(d.values)*2 + 1
-		newSlice := make([]T, len(d.values), newCap)
-		copy(newSlice, d.values)
-		d.values = newSlice
+// Send appends a value with minimal allocation and no global lock
+func (d *Drainer[T]) Send(v T) {
+	for {
+		t := d.tail.Load()
+		i := t.index.Add(1) - 1
+		if i < chunkSize {
+			t.items[i] = v
+			return
+		}
+
+		// chunk full → allocate new chunk
+		newChunk := &chunk[T]{}
+		newChunk.items[0] = v
+		newChunk.index.Store(1)
+
+		if t.next.CompareAndSwap(nil, newChunk) {
+			d.tail.CompareAndSwap(t, newChunk)
+			return
+		}
+		// someone else installed next → retry
 	}
-	d.values = d.values[:len(d.values)+1]
-	d.values[len(d.values)-1] = v
-	d.cond.Broadcast()
-	d.mu.Unlock()
 }
 
-// Count returns current length
-func (d *Drain[T]) Count() int {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return len(d.values)
+// Drain returns a snapshot of all items
+func (d *Drainer[T]) Drain() []T {
+	var out []T
+	for c := d.head; c != nil; c = c.next.Load() {
+		count := c.index.Load()
+		out = append(out, c.items[:count]...)
+	}
+	return out
 }
 
-// Drain returns a snapshot of all values
-func (d *Drain[T]) Drain() []T {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.values
+// Count returns total number of items
+func (d *Drainer[T]) Count() int {
+	total := 0
+	for c := d.head; c != nil; c = c.next.Load() {
+		total += int(c.index.Load())
+	}
+	return total
 }

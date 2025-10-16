@@ -25,9 +25,7 @@ func BenchmarkAsyncPackage(b *testing.B) {
 
 	b.Run("GoPool", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			d.Go(gopool.NewTask(func(arg gopool.Args[int]) error {
-				return SimulatedTask()
-			}))
+			d.Go(gopool.NewTask(SimulatedTask))
 		}
 
 		if err := d.Wait(); err != nil {
@@ -45,11 +43,11 @@ func BenchmarkAsyncPackageWithDrainer(b *testing.B) {
 		o := gopool.NewDrainer[int]()
 		// Create a Drain channel for async operations
 		for i := 0; i < b.N; i++ {
-			d.Go(gopool.NewTask(func(arg gopool.Args[int]) error {
+			d.Go(gopool.NewTask(func() error {
 				i := i
-				arg.Drainer.Send(i)
+				o.Send(i)
 				return SimulatedTask()
-			}).DrainTo(o))
+			}))
 		}
 
 		if err := d.Wait(); err != nil {

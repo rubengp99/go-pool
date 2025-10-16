@@ -7,7 +7,7 @@
 [![GoDoc](https://pkg.go.dev/badge/github.com/rubengp99/go-pool)](https://pkg.go.dev/github.com/rubengp99/go-pool)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/rubengp99/go-pool/blob/dev/LICENSE.md)
 
-> A lightweight, type-safe, and retryable concurrent worker pool for Go — built on **`sync.WaitGroup`**, **semaphores**, **context**, and **condition variables**, _not_ `errgroup`.
+> A lightweight, type-safe, and retryable concurrent worker pool for Go — built on **`sync.WaitGroup`**, **semaphores**, **context**, and **atomic operations**, _not_ `errgroup`.
 
 `go-pool` provides deterministic, leak-free concurrency with automatic retries, result draining, and type-safe tasks, suitable for high-throughput Go applications.
 
@@ -15,14 +15,14 @@
 
 ## Features
 
-- Type-safe generic workers (`Task[T]`)
-- Graceful error propagation
-- Built-in retry with exponential backoff + jitter
-- Concurrent result draining (`Drain`)
+- Type-safe generic drainer (`Drainer[T]`)
+- Plain `Task` functions (`func() error`) for simplicity
+- Optional retry with exponential backoff + jitter
+- Concurrent result draining
 - Deterministic shutdown (no goroutine leaks)
-- Mutex + condition variable–protected data aggregation
-- Fluent functional composition (`WithRetry`, `DrainTo`, `WithInput`)
-- Implemented with `sync.WaitGroup`, semaphores, `context`, and `sync.Cond`
+- Minimal allocations, lock-free or mutex-protected where necessary
+- Fluent functional composition (`WithRetry`)
+- Implemented with `sync.WaitGroup`, semaphores, `context`, and `atomic` operations
 
 ---
 
@@ -38,22 +38,21 @@ go get github.com/rubengp99/go-pool
 
 | Type | Description |
 |------|-------------|
-| `Task[T]` | Represents a unit of async work |
-| `Pool` | Manages concurrent execution using WaitGroup and semaphores |
-| `Drain[T]` | Collects results concurrently using mutex + condition variable |
-| `Args[T]` | Provides task input and drainer reference |
+| `Task` | Represents a unit of async work (`func() error`) |
+| `Pool` | Manages concurrent execution using `WaitGroup` and semaphores |
+| `Drainer[T]` | Collects results concurrently; safe with unbuffered channels |
 | `Worker` | Interface for executable and retryable tasks |
+| `Retryable` | Allows wrapping a `Task` with retries |
 
 ---
 
 ## How It Works
 
-`Pool` orchestrates multiple `Worker`s concurrently:
-1. Each worker runs in a separate goroutine managed by a `WaitGroup`.
+1. Each `Worker` runs in a separate goroutine managed by a `WaitGroup`.
 2. Concurrency is controlled with a semaphore.
 3. Shared `context` handles cancellation.
-4. `Drain[T]` concurrently collects results.
-5. On completion, resources and channels close automatically.
+4. `Drainer[T]` safely collects results concurrently.
+5. On completion, resources and channels are closed deterministically.
 
 ---
 
@@ -62,16 +61,16 @@ go get github.com/rubengp99/go-pool
 ### Basic Task
 
 ```go
-output := gopool.NewDrainer[User]()
-task := gopool.NewTask(func(t gopool.Args[User]) error {
-    t.Drainer.Send(User{Name: "Alice"})
+drainer := gopool.NewDrainer[User]()
+task := gopool.NewTask(func() error {
+    drainer.Send(User{Name: "Alice"})
     return nil
-}).DrainTo(output)
+})
 
 pool := gopool.NewPool()
+pool.Go(task).Wait()
 
-gopool.Go(task).Wait()
-results := output.Drain()
+results := drainer.Drain()
 fmt.Println(results[0].Name) // Alice
 ```
 
@@ -79,7 +78,7 @@ fmt.Println(results[0].Name) // Alice
 
 ```go
 var numRetries int
-task := gopool.NewTask(func(t gopool.Args[any]) error {
+task := gopool.NewTask(func() error {
     numRetries++
     if numRetries < 3 {
         return fmt.Errorf("transient error")
@@ -88,32 +87,30 @@ task := gopool.NewTask(func(t gopool.Args[any]) error {
 }).WithRetry(3, 200*time.Millisecond)
 
 pool := gopool.NewPool()
-gopool.Go(task).Wait()
+pool.Go(task).Wait()
 ```
 
-### Multiple Task Types
+### Multiple Independent Tasks
 
 ```go
-outA := gopool.NewDrainer[A]()
-outB := gopool.NewDrainer[B]()
+drainerA := gopool.NewDrainer[A]()
+drainerB := gopool.NewDrainer[B]()
 
-// Task A
-t1 := gopool.NewTask(func(t gopool.Args[A]) error {
-    t.Drainer.Send(A{Value: "Hello"})
+t1 := gopool.NewTask(func() error {
+    drainerA.Send(A{Value: "Hello"})
     return nil
-}).DrainTo(outA)
+})
 
-// Task B
-t2 := gopool.NewTask(func(t gopool.Args[B]) error {
-    t.Drainer.Send(B{Value: 42.5})
+t2 := gopool.NewTask(func() error {
+    drainerB.Send(B{Value: 42.5})
     return nil
-}).DrainTo(outB)
+})
 
 pool := gopool.NewPool()
-gopool.Go(t1, t2).Wait()
+pool.Go(t1, t2).Wait()
 
-fmt.Println(outA.Drain())
-fmt.Println(outB.Drain())
+fmt.Println(drainerA.Drain())
+fmt.Println(drainerB.Drain())
 ```
 
 ---
@@ -121,36 +118,40 @@ fmt.Println(outB.Drain())
 ## Interfaces
 
 ```go
-type Worker interface { Executable; Retryable }
-type Executable interface { Execute() error }
-type Retryable interface { WithRetry(attempts uint, sleep time.Duration) Worker }
+type Worker interface {
+    Execute() error
+    Retryable
+}
+
+type Retryable interface {
+    WithRetry(attempts uint, sleep time.Duration) Worker
+}
 ```
 
----
-
-## Structs and Functions
-
-### Task[T]
-- `Execute()` - run the task
-- `WithRetry(attempts, sleep)` - add retry logic
-- `DrainTo(d *Drain[T])` - send output to drain
-- `WithInput(input *T)` - provide task input
-
-### Pool
-- `Go(tasks ...Worker)` - run tasks concurrently
-- `WithRetry(attempts, sleep)` - global retry policy
-- `WithLimit(limit)` - set concurrency limit
-- `Wait()` - wait for all tasks
-- `Close()` - cancel and cleanup
-
-### Drain[T]
-- `Send(input T)` - safely push a value
-- `Drain()` - collect all values
-- `Count()` - get collected count
+> No `WithInput` or `DrainTo` exists anymore; tasks handle input and result sending themselves.
 
 ---
 
-## Benchmarks
+## Drainer
+
+`Drainer[T]` collects results safely even with unbuffered channels.
+
+```go
+type Drainer[T any] chan T
+
+func NewDrainer[T any]() Drainer[T]
+func (d Drainer[T]) Send(v T)
+func (d Drainer[T]) Drain() []T
+func (d Drainer[T]) Close()
+```
+
+- `Send()` pushes a value into the drain.
+- `Drain()` returns a snapshot of all collected values.
+- `Close()` marks the drain as finished.
+
+---
+
+## Benchmarks (v1)
 
 ```
 goos: linux, goarch: amd64, cpu: 13th Gen Intel i9-13900KS
@@ -168,15 +169,31 @@ goos: linux, goarch: amd64, cpu: 13th Gen Intel i9-13900KS
 
 ![Benchmark Comparison](benchmark_chart.png)
 
-Even though `go-pool` adds a small constant overhead compared to `errgroup` (≈100–130 ns per operation),
-it provides type safety, retries, automatic draining, and deterministic cleanup — all while staying within ~1.7× of native concurrency performance.
+## Benchmarks (v2)
 
-### Benchmark Insights
+```
+goos: linux, goarch: amd64, cpu: 13th Gen Intel i9-13900KS
+```
 
-- `GoPool` and `GoPoolWithDrainer` show consistent sub-microsecond operation times.
-- Memory allocations remain extremely low — under 250 B/op even with drainer support.
-- The performance delta vs `errgroup` reflects controlled synchronization overhead (mutex + condition variable).
-- In practice, `go-pool` scales linearly with worker count and maintains predictable latency under load.
+| Name                               | Iterations  | ns/op   | B/op  | allocs/op |
+|------------------------------------|------------:|--------:|------:|-----------:|
+| **ErrGroup**                        | 6,203,892   | **183.5** | **24** | **1**      |
+| **GoPool**                          | 6,145,203   | **192.0**   | 32    | 1          |
+| GoPoolWithDrainer                   | 5,508,412   | 209.0   | 127   | 2          |
+| ChannelsWithOutputAndErrChannel     | 4,461,849   | 262.0   | 72    | 2          |
+| ChannelsWithWaitGroup               | 4,431,901   | 271.8   | 80    | 2          |
+| ChannelsWithErrGroup                | 4,459,243   | 274.8   | 80    | 2          |
+| MutexWithErrGroup                   | 2,896,214   | 378.3   | 135   | 2          |
+
+
+![Benchmark Comparison](benchmark_chart_v2.png)
+
+---
+
+Even though `GoPool` adds a small constant overhead compared to `ErrGroup (≈8.5 ns per operation, 192 ns vs 183.5 ns)`,
+it provides type safety, retries, deterministic cleanup, and concurrent draining — while staying well within ~1.05× of native concurrency performance.
+
+Memory-wise, `GoPool` uses slightly more: `32 B/op` vs `24 B/op` and `1 vs 1 allocs/op`, negligible for most workloads considering the added features.
 
 ---
 
@@ -184,62 +201,27 @@ it provides type safety, retries, automatic draining, and deterministic cleanup 
 
 - Structured concurrency with `sync.WaitGroup`
 - Controlled parallelism via semaphores
-- Mutex + `sync.Cond`–protected drains
 - Context-based cancellation and cleanup
 - Exponential backoff retries
 - Leak-free, deterministic shutdown
+- Drainer supports unbuffered channels for high-volume inputs
 
 ---
 
-## ⚠️ Notes and Best Practices
+## Notes and Best Practices
 
-### General
+- **Thread Safety:** Never access internal slices/channels directly.
+- **Drainer:** Use `Send()` and `Drain()`, do not close manually if multiple producers exist.
+- **Task Management:** Wrap work with `NewTask(func() error)` and optionally `.WithRetry()`.
 
-- Thread Safety — never access internal slices or channels directly.
-- Non-blocking design — use `Drain()` or wait for pool completion instead of manual `close()` calls.
+---
 
-### Drainer (Drain)
+## Testing
 
-- Create via `gopool.NewDrainer[T]()`
-- Use `Send()` to safely push results
-- Collect values using `Drain()`
-- Internally guarded by `sync.Mutex` and `sync.Cond`
-
-### Task and Worker Management
-
-- Wrap async functions with `gopool.NewTask()`
-- Chain configuration fluently using `.WithRetry()` and `.DrainTo()`
-- Provide inputs using `.WithInput()`
-
-### Pool
-
-- Use `gopool.NewPool()` for controlled concurrency
-- Limit parallelism with `.WithLimit(limit)`
-- Apply retry policy globally with `.WithRetry(attempts, sleep)`
-- Wait for all tasks to complete using `.Wait()`
-
-### Testing
-
-- Run deterministic tests with:
 ```bash
 go test -v ./...
-```
-- Benchmark performance with:
-```bash
 go test -bench . -benchmem -memprofile=mem.prof
 ```
----
-
-## Summary
-
-`go-pool` provides a modern, type-safe, and retryable abstraction over Go’s native synchronization primitives — combining simplicity, determinism, and high throughput.
-
-Built for developers who want concurrency that’s:
-
-- Readable
-- Deterministic
-- Retry-aware
-- Leak-free
 
 ---
 

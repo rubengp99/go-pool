@@ -12,7 +12,7 @@ import (
 func TestWorker(t *testing.T) {
 	numInvocations := 0
 
-	worker := gopool.NewTask(func(t gopool.Args[any]) error {
+	worker := gopool.NewTask(func() error {
 		numInvocations++
 		return nil
 	})
@@ -31,7 +31,7 @@ func TestWorker(t *testing.T) {
 func TestWorkerWithRetrySucceed(t *testing.T) {
 	numInvocations := 0
 
-	worker := gopool.NewTask(func(t gopool.Args[any]) error {
+	worker := gopool.NewTask(func() error {
 		numInvocations++
 		if numInvocations < 3 {
 			return fmt.Errorf("error")
@@ -54,7 +54,7 @@ func TestWorkerWithRetrySucceed(t *testing.T) {
 func TestWorkerWithRetry(t *testing.T) {
 	numInvocations := 0
 
-	worker := gopool.NewTask(func(t gopool.Args[any]) error {
+	worker := gopool.NewTask(func() error {
 		numInvocations++
 		return fmt.Errorf("error")
 	}).WithRetry(3, 100*time.Millisecond)
@@ -77,11 +77,11 @@ func TestWorkerWithInput(t *testing.T) {
 		value: "initial",
 	}
 
-	worker := gopool.NewTask(func(t gopool.Args[*typeA]) error {
+	worker := gopool.NewTask(func() error {
 		numInvocations++
-		t.Input.value = "updated!"
+		initial.value = "updated!"
 		return nil
-	}).WithInput(&initial)
+	})
 
 	err := worker.Execute()
 
@@ -103,13 +103,13 @@ func TestWorkerWithOutput(t *testing.T) {
 
 	output := gopool.NewDrainer[typeA]()
 
-	worker := gopool.NewTask(func(t gopool.Args[typeA]) error {
+	worker := gopool.NewTask(func() error {
 		numInvocations++
-		t.Drainer.Send(typeA{
+		output.Send(typeA{
 			value: "initial",
 		})
 		return nil
-	}).DrainTo(output)
+	})
 
 	err := worker.Execute()
 	results := output.Drain()

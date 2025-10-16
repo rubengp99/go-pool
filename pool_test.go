@@ -20,7 +20,7 @@ type typeB struct {
 func TestConcurrentClient(t *testing.T) {
 	numInvocations := 0
 
-	tFunc := func(t gopool.Args[any]) error {
+	tFunc := func() error {
 		numInvocations++
 		return nil
 	}
@@ -46,14 +46,14 @@ func TestConcurrentClient(t *testing.T) {
 func TestConcurrentClientWithError(t *testing.T) {
 	numInvocations := 0
 
-	tFunc := func(t gopool.Args[any]) error {
+	tFunc := func() error {
 		numInvocations++
 		return nil
 	}
 
 	requests := gopool.Workers{
 		gopool.NewTask(tFunc),
-		gopool.NewTask(func(t gopool.Args[any]) error {
+		gopool.NewTask(func() error {
 			numInvocations++
 			return fmt.Errorf("bye")
 		}),
@@ -77,7 +77,7 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 	numInvocations := 0
 	numRetries := 0
 
-	tFunc := func(T gopool.Args[any]) error {
+	tFunc := func() error {
 		numInvocations++
 		return nil
 	}
@@ -86,7 +86,7 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 		gopool.NewTask(tFunc),
 		gopool.NewTask(tFunc),
 		gopool.NewTask(tFunc),
-		gopool.NewTask(func(t gopool.Args[any]) error {
+		gopool.NewTask(func() error {
 			numInvocations++
 
 			if numRetries < 2 {
@@ -118,7 +118,7 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 	numInvocations := 0
 	numRetries := 0
 
-	atFunc := gopool.NewTask(func(t gopool.Args[any]) error {
+	atFunc := gopool.NewTask(func() error {
 		numInvocations++
 		return nil
 	})
@@ -127,7 +127,7 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 		atFunc,
 		atFunc,
 		atFunc,
-		gopool.NewTask(func(t gopool.Args[any]) error {
+		gopool.NewTask(func() error {
 			numInvocations++
 			numRetries++
 
@@ -156,11 +156,11 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 	numInvocations := 0
 
 	requests := gopool.Workers{
-		gopool.NewTask(func(t gopool.Args[any]) error {
+		gopool.NewTask(func() error {
 			numInvocations++
 			return fmt.Errorf("bye 1")
 		}),
-		gopool.NewTask(func(t gopool.Args[any]) error {
+		gopool.NewTask(func() error {
 			numInvocations++
 
 			if numInvocations > 2 {
@@ -190,14 +190,14 @@ func TestConcurrentClientWithTaskChannel(t *testing.T) {
 
 	output := gopool.NewDrainer[typeA]() // auto-buffered channel
 
-	tFunc := func(t gopool.Args[typeA]) error {
+	tFunc := func() error {
 		numInvocations++
-		t.Drainer.Send(typeA{value: "hello-world!"})
+		output.Send(typeA{value: "hello-world!"})
 		return nil
 	}
 
 	requests := gopool.Workers{
-		gopool.NewTask(tFunc).DrainTo(output),
+		gopool.NewTask(tFunc),
 	}
 
 	pool := gopool.NewPool().WithLimit(1)
@@ -228,21 +228,21 @@ func TestConcurrentClientWith2WorkersameChannel(t *testing.T) {
 
 	output := gopool.NewDrainer[typeA]() // auto-buffered channel
 
-	tFunc := func(t gopool.Args[typeA]) error {
+	tFunc := func() error {
 		numInvocations++
-		t.Drainer.Send(typeA{value: "hello-world!"})
+		output.Send(typeA{value: "hello-world!"})
 		return nil
 	}
 
-	tFunc2 := func(t gopool.Args[typeA]) error {
+	tFunc2 := func() error {
 		numInvocations++
-		t.Drainer.Send(typeA{value: "hello-world!2"})
+		output.Send(typeA{value: "hello-world!2"})
 		return nil
 	}
 
 	requests := gopool.Workers{
-		gopool.NewTask(tFunc).DrainTo(output),
-		gopool.NewTask(tFunc2).DrainTo(output),
+		gopool.NewTask(tFunc),
+		gopool.NewTask(tFunc2),
 	}
 
 	pool := gopool.NewPool().WithLimit(1)
@@ -275,21 +275,21 @@ func TestConcurrentClientWith2TaskDiffTypes(t *testing.T) {
 	output := gopool.NewDrainer[typeA]()  // auto-buffered channel
 	output2 := gopool.NewDrainer[typeB]() // auto-buffered channel
 
-	tFunc := func(t gopool.Args[typeA]) error {
+	tFunc := func() error {
 		numInvocations++
-		t.Drainer.Send(typeA{value: "hello-world!"})
+		output.Send(typeA{value: "hello-world!"})
 		return nil
 	}
 
-	tFunc2 := func(t gopool.Args[typeB]) error {
+	tFunc2 := func() error {
 		numInvocations++
-		t.Drainer.Send(typeB{value: 2000.75})
+		output2.Send(typeB{value: 2000.75})
 		return nil
 	}
 
 	requests := gopool.Workers{
-		gopool.NewTask(tFunc).DrainTo(output),
-		gopool.NewTask(tFunc2).DrainTo(output2),
+		gopool.NewTask(tFunc),
+		gopool.NewTask(tFunc2),
 	}
 
 	pool := gopool.NewPool().WithLimit(1)
@@ -325,19 +325,19 @@ func TestConcurrentClientWith2TaskDiffTypes1Output(t *testing.T) {
 
 	output := gopool.NewDrainer[typeA]() // auto-buffered channel
 
-	tFunc := func(t gopool.Args[typeA]) error {
+	tFunc := func() error {
 		numInvocations++
-		t.Drainer.Send(typeA{value: "hello-world!"})
+		output.Send(typeA{value: "hello-world!"})
 		return nil
 	}
 
-	tFunc2 := func(t gopool.Args[typeB]) error {
+	tFunc2 := func() error {
 		numInvocations++
 		return nil
 	}
 
 	requests := gopool.Workers{
-		gopool.NewTask(tFunc).DrainTo(output),
+		gopool.NewTask(tFunc),
 		gopool.NewTask(tFunc2),
 	}
 
@@ -371,23 +371,23 @@ func TestConcurrentClientWith2TaskDiffTypes1Output1Input(t *testing.T) {
 	}
 	output := gopool.NewDrainer[typeA]() // auto-buffered channel
 
-	tFunc := func(t gopool.Args[typeA]) error {
+	tFunc := func() error {
 		numInvocations++
-		t.Drainer.Send(typeA{value: "hello-world!"})
+		output.Send(typeA{value: "hello-world!"})
 		return nil
 	}
 
-	tFunc2 := func(t gopool.Args[*typeB]) error {
+	tFunc2 := func() error {
 		numInvocations++
 
 		// update
-		t.Input.value = 3500
+		initial.value = 3500
 		return nil
 	}
 
 	requests := gopool.Workers{
-		gopool.NewTask(tFunc).DrainTo(output),
-		gopool.NewTask(tFunc2).WithInput(&initial),
+		gopool.NewTask(tFunc),
+		gopool.NewTask(tFunc2),
 	}
 
 	pool := gopool.NewPool().WithLimit(1)

@@ -52,7 +52,7 @@ func (p *Pool) Go(tasks ...Worker) *Pool {
 }
 
 // executeTask is standalone to avoid closure allocation
-func executeTask(p *Pool, w Worker) {
+func executeTask(p *Pool, fn Worker) {
 	defer p.wg.Done()
 	if p.sem != nil {
 		<-p.sem
@@ -60,7 +60,7 @@ func executeTask(p *Pool, w Worker) {
 
 	currentSleep := p.sleep
 	for i := uint(0); i < p.attempts; i++ {
-		err := w.Execute()
+		err := fn.Execute()
 		if err == nil {
 			return
 		}

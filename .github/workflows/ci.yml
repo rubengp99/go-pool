@@ -90,12 +90,15 @@ jobs:
       - name: Determine Tag
         id: version
         run: |
+          # Fetch latest semver tag globally
+          latest_tag=$(git tag --list 'v*.*.*' --sort=-v:refname | head -n 1 || echo "v0.0.0")
+          echo "Latest tag: $latest_tag"
+
           if [ -n "${{ github.event.inputs.tag }}" ]; then
-            # Use manual tag if provided
+            # Manual workflow_dispatch tag
             new_tag="${{ github.event.inputs.tag }}"
           elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
-            # Auto-increment patch version for main branch
-            latest_tag=$(git describe --tags --abbrev=0 || echo "v0.0.0")
+            # Auto-increment patch for main
             IFS='.' read -r major minor patch <<<"${latest_tag#v}"
             if [ "$patch" -lt 9 ]; then
               patch=$((patch + 1))
@@ -110,11 +113,11 @@ jobs:
             fi
             new_tag="v${major}.${minor}.${patch}"
           else
-            # Use pushed tag for tag-triggered workflow
+            # Triggered by tag push
             new_tag="${GITHUB_REF##*/}"
           fi
 
-          # Ensure tag exists
+          # Create tag if missing
           if ! git rev-parse "$new_tag" >/dev/null 2>&1; then
             git tag "$new_tag"
             git push origin "$new_tag"

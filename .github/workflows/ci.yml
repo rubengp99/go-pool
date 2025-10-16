@@ -87,18 +87,27 @@ jobs:
       - name: Fetch All Tags
         run: git fetch --tags
 
+      - name: Check for 'norelease' in last commit
+        id: skip
+        run: |
+          LAST_MSG=$(git log -1 --pretty=%B)
+          echo "Last commit message: $LAST_MSG"
+          if [[ "$LAST_MSG" == *"norelease"* ]]; then
+            echo "skip_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip_release=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Determine Tag
         id: version
+        if: steps.skip.outputs.skip_release == 'false'
         run: |
-          # Fetch latest semver tag globally
           latest_tag=$(git tag --list 'v*.*.*' --sort=-v:refname | head -n 1 || echo "v0.0.0")
           echo "Latest tag: $latest_tag"
 
           if [ -n "${{ github.event.inputs.tag }}" ]; then
-            # Manual workflow_dispatch tag
             new_tag="${{ github.event.inputs.tag }}"
           elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
-            # Auto-increment patch for main
             IFS='.' read -r major minor patch <<<"${latest_tag#v}"
             if [ "$patch" -lt 9 ]; then
               patch=$((patch + 1))
@@ -113,11 +122,9 @@ jobs:
             fi
             new_tag="v${major}.${minor}.${patch}"
           else
-            # Triggered by tag push
             new_tag="${GITHUB_REF##*/}"
           fi
 
-          # Create tag if missing
           if ! git rev-parse "$new_tag" >/dev/null 2>&1; then
             git tag "$new_tag"
             git push origin "$new_tag"
@@ -126,6 +133,7 @@ jobs:
           echo "tag=$new_tag" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release with Notes
+        if: steps.skip.outputs.skip_release == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}

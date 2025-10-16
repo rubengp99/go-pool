@@ -2,6 +2,7 @@ package gopool_test
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,10 +19,10 @@ type typeB struct {
 }
 
 func TestConcurrentClient(t *testing.T) {
-	numInvocations := 0
+	var numInvocations uint32
 
 	tFunc := func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 		return nil
 	}
 
@@ -39,22 +40,22 @@ func TestConcurrentClient(t *testing.T) {
 	})
 
 	t.Run("3 requests done", func(t *testing.T) {
-		assert.Equal(t, 3, numInvocations)
+		assert.Equal(t, 3, int(numInvocations))
 	})
 }
 
 func TestConcurrentClientWithError(t *testing.T) {
-	numInvocations := 0
+	var numInvocations uint32
 
 	tFunc := func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 		return nil
 	}
 
 	requests := gopool.Workers{
 		gopool.NewTask(tFunc),
 		gopool.NewTask(func() error {
-			numInvocations++
+			atomic.AddUint32(&numInvocations, 1)
 			return fmt.Errorf("bye")
 		}),
 		gopool.NewTask(tFunc),
@@ -69,16 +70,16 @@ func TestConcurrentClientWithError(t *testing.T) {
 	})
 
 	t.Run("3 requests done", func(t *testing.T) {
-		assert.Equal(t, 3, numInvocations)
+		assert.Equal(t, 3, int(numInvocations))
 	})
 }
 
 func TestConcurrentClientWithRetry(t *testing.T) {
-	numInvocations := 0
+	var numInvocations uint32
 	numRetries := 0
 
 	tFunc := func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 		return nil
 	}
 
@@ -87,7 +88,7 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 		gopool.NewTask(tFunc),
 		gopool.NewTask(tFunc),
 		gopool.NewTask(func() error {
-			numInvocations++
+			atomic.AddUint32(&numInvocations, 1)
 
 			if numRetries < 2 {
 				numRetries++
@@ -102,7 +103,7 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 	err := pool.Go(requests...).Wait()
 
 	t.Run("6 requests done", func(t *testing.T) {
-		assert.Equal(t, 6, numInvocations)
+		assert.Equal(t, 6, int(numInvocations))
 	})
 
 	t.Run("2 retries done", func(t *testing.T) {
@@ -115,11 +116,11 @@ func TestConcurrentClientWithRetry(t *testing.T) {
 }
 
 func TestConcurrentClientWithRetryFailure(t *testing.T) {
-	numInvocations := 0
+	var numInvocations uint32
 	numRetries := 0
 
 	atFunc := gopool.NewTask(func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 		return nil
 	})
 
@@ -128,7 +129,7 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 		atFunc,
 		atFunc,
 		gopool.NewTask(func() error {
-			numInvocations++
+			atomic.AddUint32(&numInvocations, 1)
 			numRetries++
 
 			return fmt.Errorf("bye")
@@ -139,7 +140,7 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 
 	err := pool.Go(requests...).Wait()
 	t.Run("6 requests done", func(t *testing.T) {
-		assert.Equal(t, 6, numInvocations)
+		assert.Equal(t, 6, int(numInvocations))
 	})
 
 	t.Run("3 retries done", func(t *testing.T) {
@@ -153,17 +154,17 @@ func TestConcurrentClientWithRetryFailure(t *testing.T) {
 }
 
 func TestConcurrentClientWithAllRetry(t *testing.T) {
-	numInvocations := 0
+	var numInvocations uint32
 
 	requests := gopool.Workers{
 		gopool.NewTask(func() error {
-			numInvocations++
+			atomic.AddUint32(&numInvocations, 1)
 			return fmt.Errorf("bye 1")
 		}),
 		gopool.NewTask(func() error {
-			numInvocations++
+			atomic.AddUint32(&numInvocations, 1)
 
-			if numInvocations > 2 {
+			if atomic.LoadUint32(&numInvocations) > 2 {
 				return nil
 			}
 
@@ -176,7 +177,7 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 
 	err := pool.Go(requests...).Wait()
 	t.Run("5 requests done", func(t *testing.T) {
-		assert.Equal(t, 5, numInvocations)
+		assert.Equal(t, 5, int(numInvocations))
 	})
 
 	t.Run("Returns the first error", func(t *testing.T) {
@@ -186,12 +187,12 @@ func TestConcurrentClientWithAllRetry(t *testing.T) {
 }
 
 func TestConcurrentClientWithTaskChannel(t *testing.T) {
-	numInvocations := 0
+	var numInvocations uint32
 
 	output := gopool.NewDrainer[typeA]() // auto-buffered channel
 
 	tFunc := func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 		output.Send(typeA{value: "hello-world!"})
 		return nil
 	}
@@ -213,7 +214,7 @@ func TestConcurrentClientWithTaskChannel(t *testing.T) {
 	})
 
 	t.Run("1 request done", func(t *testing.T) {
-		assert.Equal(t, 1, numInvocations)
+		assert.Equal(t, 1, int(numInvocations))
 	})
 
 	t.Run("results drained", func(t *testing.T) {
@@ -224,18 +225,18 @@ func TestConcurrentClientWithTaskChannel(t *testing.T) {
 }
 
 func TestConcurrentClientWith2WorkersameChannel(t *testing.T) {
-	numInvocations := 0
+	var numInvocations uint32
 
 	output := gopool.NewDrainer[typeA]() // auto-buffered channel
 
 	tFunc := func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 		output.Send(typeA{value: "hello-world!"})
 		return nil
 	}
 
 	tFunc2 := func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 		output.Send(typeA{value: "hello-world!2"})
 		return nil
 	}
@@ -258,7 +259,7 @@ func TestConcurrentClientWith2WorkersameChannel(t *testing.T) {
 	})
 
 	t.Run("2 request done", func(t *testing.T) {
-		assert.Equal(t, 2, numInvocations)
+		assert.Equal(t, 2, int(numInvocations))
 	})
 
 	t.Run("results drained", func(t *testing.T) {
@@ -270,19 +271,19 @@ func TestConcurrentClientWith2WorkersameChannel(t *testing.T) {
 }
 
 func TestConcurrentClientWith2TaskDiffTypes(t *testing.T) {
-	numInvocations := 0
+	var numInvocations uint32
 
 	output := gopool.NewDrainer[typeA]()  // auto-buffered channel
 	output2 := gopool.NewDrainer[typeB]() // auto-buffered channel
 
 	tFunc := func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 		output.Send(typeA{value: "hello-world!"})
 		return nil
 	}
 
 	tFunc2 := func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 		output2.Send(typeB{value: 2000.75})
 		return nil
 	}
@@ -306,7 +307,7 @@ func TestConcurrentClientWith2TaskDiffTypes(t *testing.T) {
 	})
 
 	t.Run("2 request done", func(t *testing.T) {
-		assert.Equal(t, 2, numInvocations)
+		assert.Equal(t, 2, int(numInvocations))
 	})
 
 	t.Run("results drained", func(t *testing.T) {
@@ -321,18 +322,18 @@ func TestConcurrentClientWith2TaskDiffTypes(t *testing.T) {
 }
 
 func TestConcurrentClientWith2TaskDiffTypes1Output(t *testing.T) {
-	numInvocations := 0
+	var numInvocations uint32
 
 	output := gopool.NewDrainer[typeA]() // auto-buffered channel
 
 	tFunc := func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 		output.Send(typeA{value: "hello-world!"})
 		return nil
 	}
 
 	tFunc2 := func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 		return nil
 	}
 
@@ -354,7 +355,7 @@ func TestConcurrentClientWith2TaskDiffTypes1Output(t *testing.T) {
 	})
 
 	t.Run("2 request done", func(t *testing.T) {
-		assert.Equal(t, 2, numInvocations)
+		assert.Equal(t, 2, int(numInvocations))
 	})
 
 	t.Run("results drained", func(t *testing.T) {
@@ -365,20 +366,20 @@ func TestConcurrentClientWith2TaskDiffTypes1Output(t *testing.T) {
 }
 
 func TestConcurrentClientWith2TaskDiffTypes1Output1Input(t *testing.T) {
-	numInvocations := 0
+	var numInvocations uint32
 	initial := typeB{
 		value: 2000,
 	}
 	output := gopool.NewDrainer[typeA]() // auto-buffered channel
 
 	tFunc := func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 		output.Send(typeA{value: "hello-world!"})
 		return nil
 	}
 
 	tFunc2 := func() error {
-		numInvocations++
+		atomic.AddUint32(&numInvocations, 1)
 
 		// update
 		initial.value = 3500
@@ -403,7 +404,7 @@ func TestConcurrentClientWith2TaskDiffTypes1Output1Input(t *testing.T) {
 	})
 
 	t.Run("2 request done", func(t *testing.T) {
-		assert.Equal(t, 2, numInvocations)
+		assert.Equal(t, 2, int(numInvocations))
 	})
 
 	t.Run("results drained", func(t *testing.T) {

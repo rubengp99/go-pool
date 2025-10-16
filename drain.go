@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 )
 
-const chunkSize = 256
+const chunkSize = 64
 
 type chunk[T any] struct {
 	items [chunkSize]T
